@@ -15,6 +15,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// CreateClientOptions type indicates create client options
+type CreateClientOptions func(*circuit.Manager) error
+
+// StartClientOptions type indicates start client options
+type StartClientOptions func(*circuit.Config, *hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error
+
 // Client defines circuit breaker client properties
 type Client struct {
 	manager *circuit.Manager
@@ -22,7 +28,7 @@ type Client struct {
 }
 
 // CreateClient create new circuit client
-func CreateClient(options ...func(*circuit.Manager) error) (*Client, error) {
+func CreateClient(options ...CreateClientOptions) (*Client, error) {
 	manager := circuit.Manager{}
 	for _, op := range options {
 		if err := op(&manager); err != nil {
@@ -37,7 +43,7 @@ func CreateClient(options ...func(*circuit.Manager) error) (*Client, error) {
 }
 
 // SetDefaultCircuitProperty set default circuit constructor
-func SetDefaultCircuitProperty(cons circuit.CommandPropertiesConstructor) func(*circuit.Manager) error {
+func SetDefaultCircuitProperty(cons circuit.CommandPropertiesConstructor) CreateClientOptions {
 	return func(manager *circuit.Manager) error {
 		manager.DefaultCircuitProperties = append(manager.DefaultCircuitProperties, cons)
 		return nil
@@ -45,8 +51,7 @@ func SetDefaultCircuitProperty(cons circuit.CommandPropertiesConstructor) func(*
 }
 
 // Start with a circuit name
-func (c *Client) Start(name string, options ...func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error) error {
+func (c *Client) Start(name string, options ...StartClientOptions) error {
 	// default is no timeout no max concurrent request
 	config := circuit.Config{
 		Execution: circuit.ExecutionConfig{
@@ -77,8 +82,7 @@ func (c *Client) Start(name string, options ...func(*circuit.Config,
 }
 
 // SetExecuteTimeoutOption set execution timeout config
-func (c *Client) SetExecuteTimeoutOption(timeout time.Duration) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetExecuteTimeoutOption(timeout time.Duration) StartClientOptions {
 	return func(config *circuit.Config, _ *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		config.Execution.Timeout = timeout
 		return nil
@@ -86,8 +90,7 @@ func (c *Client) SetExecuteTimeoutOption(timeout time.Duration) func(*circuit.Co
 }
 
 // SetExecuteMaxConcurrentRequestsOption set execution max concurrent config
-func (c *Client) SetExecuteMaxConcurrentRequestsOption(maxConn int64) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetExecuteMaxConcurrentRequestsOption(maxConn int64) StartClientOptions {
 	return func(config *circuit.Config, _ *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		config.Execution.MaxConcurrentRequests = maxConn
 		return nil
@@ -95,8 +98,7 @@ func (c *Client) SetExecuteMaxConcurrentRequestsOption(maxConn int64) func(*circ
 }
 
 // SetExecuteIgnoreInteruptsOption set execution ignore interupts
-func (c *Client) SetExecuteIgnoreInteruptsOption(ignored bool) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetExecuteIgnoreInteruptsOption(ignored bool) StartClientOptions {
 	return func(config *circuit.Config, _ *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		config.Execution.IgnoreInterrputs = ignored
 		return nil
@@ -104,8 +106,7 @@ func (c *Client) SetExecuteIgnoreInteruptsOption(ignored bool) func(*circuit.Con
 }
 
 // SetFallbackDisable set fallback disable/enable
-func (c *Client) SetFallbackDisable(disable bool) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetFallbackDisable(disable bool) StartClientOptions {
 	return func(config *circuit.Config, _ *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		config.Fallback.Disabled = disable
 		return nil
@@ -113,8 +114,7 @@ func (c *Client) SetFallbackDisable(disable bool) func(*circuit.Config,
 }
 
 // SetFallbackMaxConcurrentRequestsOption set fallback max concurrent request
-func (c *Client) SetFallbackMaxConcurrentRequestsOption(maxConn int64) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetFallbackMaxConcurrentRequestsOption(maxConn int64) StartClientOptions {
 	return func(config *circuit.Config, _ *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		config.Fallback.MaxConcurrentRequests = maxConn
 		return nil
@@ -122,17 +122,15 @@ func (c *Client) SetFallbackMaxConcurrentRequestsOption(maxConn int64) func(*cir
 }
 
 // SetCloserSleepWindow set closer sleep windown
-func (c *Client) SetCloserSleepWindow(sleepWindow time.Duration) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetCloserSleepWindow(sleepWindow time.Duration) StartClientOptions {
 	return func(_ *circuit.Config, closer *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		closer.SleepWindow = sleepWindow
 		return nil
 	}
 }
 
-// SetCloserAttemots set closer attempts
-func (c *Client) SetCloserAttemots(attempts int64) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+// SetCloserAttempts set closer attempts
+func (c *Client) SetCloserAttempts(attempts int64) StartClientOptions {
 	return func(_ *circuit.Config, closer *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		closer.HalfOpenAttempts = attempts
 		return nil
@@ -140,8 +138,7 @@ func (c *Client) SetCloserAttemots(attempts int64) func(*circuit.Config,
 }
 
 // SetCloserRequiredSuccessful set closer required successful request before close
-func (c *Client) SetCloserRequiredSuccessful(require int64) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetCloserRequiredSuccessful(require int64) StartClientOptions {
 	return func(_ *circuit.Config, closer *hystrix.ConfigureCloser, _ *hystrix.ConfigureOpener) error {
 		closer.RequiredConcurrentSuccessful = require
 		return nil
@@ -149,8 +146,7 @@ func (c *Client) SetCloserRequiredSuccessful(require int64) func(*circuit.Config
 }
 
 // SetOpenerErrorThreshold set opener error threshold
-func (c *Client) SetOpenerErrorThreshold(threshold int64) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetOpenerErrorThreshold(threshold int64) StartClientOptions {
 	return func(_ *circuit.Config, _ *hystrix.ConfigureCloser, opener *hystrix.ConfigureOpener) error {
 		opener.ErrorThresholdPercentage = threshold
 		return nil
@@ -158,10 +154,25 @@ func (c *Client) SetOpenerErrorThreshold(threshold int64) func(*circuit.Config,
 }
 
 // SetOpenerRequestThreshold set opener request threshold
-func (c *Client) SetOpenerRequestThreshold(threshold int64) func(*circuit.Config,
-	*hystrix.ConfigureCloser, *hystrix.ConfigureOpener) error {
+func (c *Client) SetOpenerRequestThreshold(threshold int64) StartClientOptions {
 	return func(_ *circuit.Config, _ *hystrix.ConfigureCloser, opener *hystrix.ConfigureOpener) error {
 		opener.RequestVolumeThreshold = threshold
+		return nil
+	}
+}
+
+// SetOpenerRollingDuration set opener rolling duration
+func (c *Client) SetOpenerRollingDuration(rollingDuration time.Duration) StartClientOptions {
+	return func(_ *circuit.Config, _ *hystrix.ConfigureCloser, opener *hystrix.ConfigureOpener) error {
+		opener.RollingDuration = rollingDuration
+		return nil
+	}
+}
+
+// SetOpenerNumBuckets set opener number of buckets
+func (c *Client) SetOpenerNumBuckets(buckets int) StartClientOptions {
+	return func(_ *circuit.Config, _ *hystrix.ConfigureCloser, opener *hystrix.ConfigureOpener) error {
+		opener.NumBuckets = buckets
 		return nil
 	}
 }
