@@ -39,7 +39,7 @@ type Client struct {
 }
 
 // CreateClient create mqtt client
-func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client, err error) {
+func CreateClient(options ...environment.CreateENVOptions) (client *Client, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "create env"))

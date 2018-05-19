@@ -55,7 +55,7 @@ type Client struct {
 }
 
 // CreateClient creates GRPC client
-func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client, err error) {
+func CreateClient(options ...environment.CreateENVOptions) (client *Client, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "create env"))

@@ -134,7 +134,7 @@
     "pool",
     "trace"
   ]
-  revision = "ebce59c896f60e5d6d79214ebe1a88d6e5e4be8b"
+  revision = "613aa7f5b6ec55971eace55ad5a7653b7bbc76df"
 
 [[projects]]
   branch = "master"
@@ -168,8 +168,8 @@
     "types",
     "wire"
   ]
-  revision = "26cf9707480e6b90e5eff22cf0bbf05319154232"
-  version = "v0.3.4"
+  revision = "4c9fbcbd6d73a644fd17214fe475296780c68fb5"
+  version = "v0.3.3"
 
 [[projects]]
   name = "github.com/pierrec/lz4"
@@ -250,7 +250,7 @@
     "trace",
     "websocket"
   ]
-  revision = "2491c5de3490fced2f6cff376127c667efeed857"
+  revision = "57065200b4b034a1c8ad54ff77069408c2218ae6"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -315,6 +315,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2a5246247d66e3918b24e07361d1b78e54d2117b5c44e77d96e1988cc9fd1ad7"
+  inputs-digest = "db5be703e6370b129ffd2b0715eed9053b44d834c0623a4ec185bea81eccb544"
   solver-name = "gps-cdcl"
   solver-version = 1
