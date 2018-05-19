@@ -12,6 +12,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ConnectClientOptions type indicates start client options
+type ConnectClientOptions func() error
+
 const (
 	// default grpc client config
 	clientHost     = "0.0.0.0"
@@ -36,7 +39,7 @@ type Client struct {
 }
 
 // CreateClient create mqtt client
-func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client, err error) {
+func CreateClient(options ...environment.CreateENVOptions) (client *Client, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "create env"))
@@ -49,14 +52,16 @@ func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client
 }
 
 // Connect connect to a mqtt server
-func (c *Client) Connect(options ...func() error) (err error) {
+func (c *Client) Connect(options ...ConnectClientOptions) (err error) {
 	if c.Config == nil {
 		return errors.New(lib.StringTags("connect client", "config not found"))
 	}
 	opts := mq.NewClientOptions()
 	opts.AddBroker(lib.GetURL(c.Config.Host, c.Config.Port))
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+		}
 	}
 	opts.SetUsername(c.Config.UserName)
 	opts.SetPassword(c.Config.Password)
@@ -78,7 +83,7 @@ func (c *Client) Disconnect() error {
 }
 
 // SetAuthOption set mqtt auth
-func (c *Client) SetAuthOption(username, password string) func() error {
+func (c *Client) SetAuthOption(username, password string) ConnectClientOptions {
 	return func() (err error) {
 		c.Config.UserName = username
 		c.Config.Password = password
@@ -87,7 +92,7 @@ func (c *Client) SetAuthOption(username, password string) func() error {
 }
 
 // SetHostPortOption set client host port
-func (c *Client) SetHostPortOption(host string, port int) func() error {
+func (c *Client) SetHostPortOption(host string, port int) ConnectClientOptions {
 	return func() (err error) {
 		c.Config.Host = host
 		c.Config.Port = port
@@ -96,7 +101,7 @@ func (c *Client) SetHostPortOption(host string, port int) func() error {
 }
 
 // SetTracerOption set tracer
-func (c *Client) SetTracerOption(tracer *trace.Client) func() error {
+func (c *Client) SetTracerOption(tracer *trace.Client) ConnectClientOptions {
 	return func() (err error) {
 		c.TraceClient = tracer
 		return nil

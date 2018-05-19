@@ -22,6 +22,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+// StartClientOptions type indicates start client options
+type StartClientOptions func() error
+
+// SendClientOptions type indicates send client options
+type SendClientOptions func(*RequestOption) error
+
 const (
 	timeout         = 32
 	tlsVerification = false
@@ -50,7 +56,7 @@ type Client struct {
 }
 
 // CreateClient creates GRPC client
-func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client, err error) {
+func CreateClient(options ...environment.CreateENVOptions) (client *Client, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "create env"))
@@ -67,12 +73,14 @@ func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client
 }
 
 // Connect create client connection
-func (c *Client) Connect(options ...func() error) (err error) {
+func (c *Client) Connect(options ...StartClientOptions) (err error) {
 	if c.Config == nil {
 		return errors.New(lib.StringTags("connect client", "config not found"))
 	}
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+		}
 	}
 	return err
 }
@@ -83,7 +91,7 @@ func (c *Client) Disconnect() error {
 }
 
 // SetTracerOption set tracer
-func (c *Client) SetTracerOption(tracer *trace.Client) func() error {
+func (c *Client) SetTracerOption(tracer *trace.Client) StartClientOptions {
 	return func() (err error) {
 		c.TraceClient = tracer
 		return nil
@@ -92,7 +100,7 @@ func (c *Client) SetTracerOption(tracer *trace.Client) func() error {
 
 // Send sends general request to a URL and returns HTTP response
 func (c *Client) Send(ctx context.Context, method string, url string,
-	options ...func(*RequestOption) error) (res *http.Response, err error) {
+	options ...SendClientOptions) (res *http.Response, err error) {
 	var request *http.Request
 	if c.TraceClient != nil {
 		ctx, err = c.TraceClient.StartTracing(ctx,
@@ -166,7 +174,7 @@ func (c *Client) Send(ctx context.Context, method string, url string,
 }
 
 // SetRequestOptionBody set request body
-func (c *Client) SetRequestOptionBody(body interface{}) func(*RequestOption) error {
+func (c *Client) SetRequestOptionBody(body interface{}) SendClientOptions {
 	return func(ro *RequestOption) error {
 		data, err := json.Marshal(body)
 		if err != nil {
@@ -179,7 +187,7 @@ func (c *Client) SetRequestOptionBody(body interface{}) func(*RequestOption) err
 }
 
 // SetRequestOptionQuery set request query
-func (c *Client) SetRequestOptionQuery(query map[string]interface{}) func(*RequestOption) error {
+func (c *Client) SetRequestOptionQuery(query map[string]interface{}) SendClientOptions {
 	return func(ro *RequestOption) error {
 		ro.Query = query
 		return nil
@@ -187,7 +195,7 @@ func (c *Client) SetRequestOptionQuery(query map[string]interface{}) func(*Reque
 }
 
 // SetRequestOptionHeader set request header
-func (c *Client) SetRequestOptionHeader(header map[string]interface{}) func(*RequestOption) error {
+func (c *Client) SetRequestOptionHeader(header map[string]interface{}) SendClientOptions {
 	return func(ro *RequestOption) error {
 		ro.Header = header
 		return nil
@@ -195,7 +203,7 @@ func (c *Client) SetRequestOptionHeader(header map[string]interface{}) func(*Req
 }
 
 // SetRequestOptionTimeout set request timeout in seconds
-func (c *Client) SetRequestOptionTimeout(timeout int) func(*RequestOption) error {
+func (c *Client) SetRequestOptionTimeout(timeout int) SendClientOptions {
 	return func(ro *RequestOption) error {
 		ro.Timeout = time.Duration(timeout) * time.Second
 		return nil
@@ -203,7 +211,7 @@ func (c *Client) SetRequestOptionTimeout(timeout int) func(*RequestOption) error
 }
 
 // SetRequestOptionTransport set request transport type
-func (c *Client) SetRequestOptionTransport(transport *http.Transport) func(*RequestOption) error {
+func (c *Client) SetRequestOptionTransport(transport *http.Transport) SendClientOptions {
 	return func(ro *RequestOption) error {
 		ro.Transport = transport
 		return nil

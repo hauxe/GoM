@@ -11,6 +11,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// CreateENVOptions create env options
+type CreateENVOptions func(*ENVConfig) error
+
 const (
 	envKey = "ENV"
 	envTag = "env"
@@ -44,7 +47,7 @@ type ENV struct {
 }
 
 // CreateENV create environment object
-func CreateENV(options ...func(*ENVConfig) error) (*ENV, error) {
+func CreateENV(options ...CreateENVOptions) (*ENV, error) {
 	config := ENVConfig{}
 	for _, op := range options {
 		if err := op(&config); err != nil {
@@ -55,7 +58,7 @@ func CreateENV(options ...func(*ENVConfig) error) (*ENV, error) {
 }
 
 // SetPrefixOption set environment prefix option
-func SetPrefixOption(prefix string) func(*ENVConfig) error {
+func SetPrefixOption(prefix string) CreateENVOptions {
 	return func(config *ENVConfig) error {
 		config.Prefix = prefix
 		return nil

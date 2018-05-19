@@ -20,6 +20,9 @@ import (
 	"github.com/hauxe/gom/trace"
 )
 
+// StartServerOptions type indicates start server options
+type StartServerOptions func() error
+
 var decoder = schema.NewDecoder()
 
 const (
@@ -55,7 +58,7 @@ type Server struct {
 }
 
 // CreateServer creates HTTP server
-func CreateServer(options ...func(*environment.ENVConfig) error) (server *Server, err error) {
+func CreateServer(options ...environment.CreateENVOptions) (server *Server, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "create env"))
@@ -79,15 +82,18 @@ func CreateServer(options ...func(*environment.ENVConfig) error) (server *Server
 }
 
 // Start starts running http server
-func (s *Server) Start(options ...func() error) (err error) {
+func (s *Server) Start(options ...StartServerOptions) (err error) {
 	if s.Config == nil {
 		return errors.New(lib.StringTags("start server", "config not found"))
 	}
 	if err = s.InitHandler(); err != nil {
 		return err
 	}
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("start server", "option error"))
+
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("start server", "option error"))
+		}
 	}
 	decoder.IgnoreUnknownKeys(true)
 	decoder.ZeroEmpty(false)
@@ -144,7 +150,7 @@ func (s *Server) InitHandler() error {
 }
 
 // SetTimeoutOption set http server timeout
-func (s *Server) SetTimeoutOption(read, write int) func() error {
+func (s *Server) SetTimeoutOption(read, write int) StartServerOptions {
 	return func() (err error) {
 		s.Config.ReadTimeout = read
 		s.Config.WriteTimeout = write
@@ -153,7 +159,7 @@ func (s *Server) SetTimeoutOption(read, write int) func() error {
 }
 
 // SetTLSOption set http server tls info
-func (s *Server) SetTLSOption(serveTLS bool, certFile, keyFile string) func() error {
+func (s *Server) SetTLSOption(serveTLS bool, certFile, keyFile string) StartServerOptions {
 	return func() (err error) {
 		s.Config.ServeTLS = serveTLS
 		s.Config.CertFile = certFile
@@ -163,7 +169,7 @@ func (s *Server) SetTLSOption(serveTLS bool, certFile, keyFile string) func() er
 }
 
 // SetTracerOption set tracer
-func (s *Server) SetTracerOption(tracer *trace.Client) func() error {
+func (s *Server) SetTracerOption(tracer *trace.Client) StartServerOptions {
 	return func() (err error) {
 		s.TraceClient = tracer
 		return nil
@@ -171,11 +177,8 @@ func (s *Server) SetTracerOption(tracer *trace.Client) func() error {
 }
 
 // SetHandlerOption set http server route handler
-func (s *Server) SetHandlerOption(routes ...ServerRoute) func() error {
+func (s *Server) SetHandlerOption(routes ...ServerRoute) StartServerOptions {
 	return func() (err error) {
-		if s.TraceClient == nil {
-			return errors.New("option SetTracerOption must be called first")
-		}
 		for _, route := range routes {
 			s.Mux.HandleFunc(route.Path, buildRouteHandler(route.Method, route.Validators, route.Handler))
 			s.Logger.Bg().Info("Registered route", zap.String("name", route.Name),
@@ -186,7 +189,7 @@ func (s *Server) SetHandlerOption(routes ...ServerRoute) func() error {
 }
 
 // SetMiddlewareTracerOption set http server middleware type tracer
-func (s *Server) SetMiddlewareTracerOption() func() error {
+func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
 	return func() (err error) {
 		if s.TraceClient == nil {
 			return errors.New("option SetTracerOption must be set first")
@@ -221,7 +224,7 @@ func (s *Server) SetMiddlewareTracerOption() func() error {
 }
 
 // SetMiddlewareWorkerPoolOption set http server uses worker pool
-func (s *Server) SetMiddlewareWorkerPoolOption(worker *pool.Worker) func() error {
+func (s *Server) SetMiddlewareWorkerPoolOption(worker *pool.Worker) StartServerOptions {
 	return func() (err error) {
 		s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			job := JobHandler{

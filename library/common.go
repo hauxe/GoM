@@ -55,13 +55,3 @@ func ToString(any interface{}) string {
 func JoinWithComma(s []string) string {
 	return strings.Join(s, ", ")
 }
-
-// RunOptionalFunc run all optional func
-func RunOptionalFunc(options ...func() error) error {
-	for _, op := range options {
-		if err := op(); err != nil {
-			return err
-		}
-	}
-	return nil
-}

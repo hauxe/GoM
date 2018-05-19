@@ -10,6 +10,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ConnectClientOptions type indicates connect client options
+type ConnectClientOptions func() error
+
 const (
 	separator          = "|"
 	standAloneServer   = ""
@@ -50,9 +53,11 @@ func CreateClient(options ...func(*environment.ENVConfig) error) (client *Client
 }
 
 // Connect connect to connect to redis
-func (c *Client) Connect(options ...func() error) (err error) {
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, "connect redis client")
+func (c *Client) Connect(options ...ConnectClientOptions) (err error) {
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, "connect redis client")
+		}
 	}
 	if _, err = c.C.Ping().Result(); err != nil {
 		return errors.Wrap(err, lib.StringTags("connect redis client", "ping client"))
@@ -69,7 +74,7 @@ func (c *Client) Disconnect() (err error) {
 }
 
 // SetAuthOption set redis auth
-func (c *Client) SetAuthOption(password string) func() error {
+func (c *Client) SetAuthOption(password string) ConnectClientOptions {
 	return func() (err error) {
 		c.Config.Password = password
 		return nil
@@ -77,7 +82,7 @@ func (c *Client) SetAuthOption(password string) func() error {
 }
 
 // SetDBOption set redis db
-func (c *Client) SetDBOption(db int) func() error {
+func (c *Client) SetDBOption(db int) ConnectClientOptions {
 	return func() (err error) {
 		c.Config.DB = db
 		return nil
@@ -85,7 +90,7 @@ func (c *Client) SetDBOption(db int) func() error {
 }
 
 // ConnectFailoverClientOption connect to failover client
-func (c *Client) ConnectFailoverClientOption() func() error {
+func (c *Client) ConnectFailoverClientOption() ConnectClientOptions {
 	return func() (err error) {
 		if c.Config.SentinelMasterName == "" ||
 			c.Config.SentinelServers == "" {
@@ -102,7 +107,7 @@ func (c *Client) ConnectFailoverClientOption() func() error {
 }
 
 // ConnectStandaloneClientOption connect to standalone client
-func (c *Client) ConnectStandaloneClientOption() func() error {
+func (c *Client) ConnectStandaloneClientOption() ConnectClientOptions {
 	return func() (err error) {
 		if c.Config.StandAloneServer == "" {
 			return errors.New("invalid standalone client config")

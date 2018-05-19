@@ -76,8 +76,10 @@ func (c *Client) Connect(options ...func() error) (err error) {
 	if c.Config == nil {
 		return errors.New(lib.StringTags("connect client", "config not found"))
 	}
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+		}
 	}
 
 	// create recorder.

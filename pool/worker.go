@@ -61,8 +61,10 @@ func (w *Worker) StartServer(options ...func() error) (err error) {
 	if w.Config == nil {
 		return errors.New(lib.StringTags("start worker", "config not found"))
 	}
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("start worker", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("start worker", "option error"))
+		}
 	}
 	var wg sync.WaitGroup
 	for i := 0; i < w.Config.MaxWorkers; i++ {

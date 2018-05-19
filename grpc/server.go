@@ -21,6 +21,9 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// StartServerOptions type indicates start server options
+type StartServerOptions func() error
+
 const (
 	// default grpc server config
 	serverHost              = "0.0.0.0"
@@ -48,7 +51,7 @@ type Server struct {
 }
 
 // CreateServer creates GRPC server
-func CreateServer(options ...func(*environment.ENVConfig) error) (server *Server, err error) {
+func CreateServer(options ...environment.CreateENVOptions) error) (server *Server, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "create env"))
@@ -65,12 +68,14 @@ func CreateServer(options ...func(*environment.ENVConfig) error) (server *Server
 }
 
 // Start starts running grpc server
-func (s *Server) Start(options ...func() error) (err error) {
+func (s *Server) Start(options ...StartServerOptions) (err error) {
 	if s.Config == nil {
 		return errors.New(lib.StringTags("start server", "config not found"))
 	}
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("start server", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("start server", "option error"))
+		}
 	}
 	url := lib.GetURL(s.Config.Host, s.Config.Port)
 	s.Conn, err = net.Listen("tcp", url)
@@ -102,7 +107,7 @@ func (s *Server) Stop() error {
 }
 
 // SetServiceDiscoveryOption set service discovery option
-func (s *Server) SetServiceDiscoveryOption(val bool) func() error {
+func (s *Server) SetServiceDiscoveryOption(val bool) StartServerOptions {
 	return func() (err error) {
 		s.Config.EnableServiceDiscovery = val
 		return nil
@@ -110,7 +115,7 @@ func (s *Server) SetServiceDiscoveryOption(val bool) func() error {
 }
 
 // SetTracerOption set tracer
-func (s *Server) SetTracerOption(tracer *trace.Client) func() error {
+func (s *Server) SetTracerOption(tracer *trace.Client) StartServerOptions {
 	return func() (err error) {
 		s.TraceClient = tracer
 		return nil
@@ -118,8 +123,8 @@ func (s *Server) SetTracerOption(tracer *trace.Client) func() error {
 }
 
 // SetMiddlewareTracerOption set grpc tracer middleware
-func (s *Server) SetMiddlewareTracerOption() func() error {
-	return func() error {
+func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
+	return StartServerOptions {
 		if s.TraceClient == nil {
 			return errors.New("option SetTracerOption must be set first")
 		}
@@ -130,7 +135,7 @@ func (s *Server) SetMiddlewareTracerOption() func() error {
 }
 
 // SetMiddlewarePoolWorkerOption set grpc pool worker middleware
-func (s *Server) SetMiddlewarePoolWorkerOption(worker *pool.Worker) func() error {
+func (s *Server) SetMiddlewarePoolWorkerOption(worker *pool.Worker) StartServerOptions {
 	return func() error {
 		if s.TraceClient == nil {
 			return errors.New("option SetTracerOption must be set first")

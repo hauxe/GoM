@@ -18,6 +18,9 @@ const (
 	clientPort = 10000
 )
 
+// StartClientOptions type indicates start client options
+type StartClientOptions func() error
+
 // ClientConfig defines GRPC client config properties
 type ClientConfig struct {
 	Host string
@@ -48,12 +51,14 @@ func CreateClient() (client *Client, err error) {
 }
 
 // Connect create client connection
-func (c *Client) Connect(options ...func() error) (err error) {
+func (c *Client) Connect(options ...StartClientOptions) (err error) {
 	if c.Config == nil {
 		return errors.New(lib.StringTags("connect client", "config not found"))
 	}
-	if err = lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("connect client", "option error"))
+		}
 	}
 	url := lib.GetURL(c.Config.Host, c.Config.Port)
 	c.C, err = g.Dial(url, c.DialOptions...)
@@ -69,7 +74,7 @@ func (c *Client) Disconnect() error {
 }
 
 // SetHostPortOption set client host port
-func (c *Client) SetHostPortOption(host string, port int) func() error {
+func (c *Client) SetHostPortOption(host string, port int) StartClientOptions {
 	return func() (err error) {
 		c.Config.Host = host
 		c.Config.Port = port
@@ -78,7 +83,7 @@ func (c *Client) SetHostPortOption(host string, port int) func() error {
 }
 
 // SetTracerOption set tracer
-func (c *Client) SetTracerOption(tracer *trace.Client) func() error {
+func (c *Client) SetTracerOption(tracer *trace.Client) StartClientOptions {
 	return func() (err error) {
 		c.TraceClient = tracer
 		return nil
@@ -86,7 +91,7 @@ func (c *Client) SetTracerOption(tracer *trace.Client) func() error {
 }
 
 // SetMiddlewareTracerOption set grpc tracer middleware
-func (c *Client) SetMiddlewareTracerOption() func() error {
+func (c *Client) SetMiddlewareTracerOption() StartClientOptions {
 	return func() error {
 		if c.TraceClient == nil {
 			return errors.New("option SetTracerOption must be set first")

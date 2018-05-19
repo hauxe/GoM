@@ -10,6 +10,9 @@ import (
 	lib "github.com/hauxe/gom/library"
 )
 
+// InitClientOptions type indicates init client options
+type InitClientOptions func() error
+
 // Func retry functions type
 type Func func(*Client) error
 
@@ -45,18 +48,20 @@ func UseExponentialRetry() Func {
 }
 
 // Init init the retry client
-func (c *Client) Init(options ...func() error) error {
+func (c *Client) Init(options ...InitClientOptions) error {
 	if c.C == nil {
 		return errors.New("retry client doesnt be created")
 	}
-	if err := lib.RunOptionalFunc(options...); err != nil {
-		return errors.Wrap(err, lib.StringTags("init client", "option error"))
+	for _, op := range options {
+		if err = op(); err != nil {
+			return errors.Wrap(err, lib.StringTags("init client", "option error"))
+		}
 	}
 	return nil
 }
 
 // SetContextOption set backoff context
-func (c *Client) SetContextOption(ctx context.Context) func() error {
+func (c *Client) SetContextOption(ctx context.Context) InitClientOptions {
 	return func() error {
 		if ctx == nil {
 			return errors.New("receive nil context")
@@ -67,7 +72,7 @@ func (c *Client) SetContextOption(ctx context.Context) func() error {
 }
 
 // SetMaxRetriesOption set backoff max retries
-func (c *Client) SetMaxRetriesOption(maxRetries uint64) func() error {
+func (c *Client) SetMaxRetriesOption(maxRetries uint64) InitClientOptions {
 	return func() error {
 		c.C = backoff.WithMaxRetries(c.C, maxRetries)
 		return nil
@@ -75,7 +80,7 @@ func (c *Client) SetMaxRetriesOption(maxRetries uint64) func() error {
 }
 
 // SetInitialIntervalOption set backoff inital interval
-func (c *Client) SetInitialIntervalOption(interval time.Duration) func() error {
+func (c *Client) SetInitialIntervalOption(interval time.Duration) InitClientOptions {
 	return func() error {
 		exponetial, ok := c.C.(*backoff.ExponentialBackOff)
 		if !ok {
@@ -87,7 +92,7 @@ func (c *Client) SetInitialIntervalOption(interval time.Duration) func() error {
 }
 
 // SetRandomizationFactorOption set backoff randomization factor
-func (c *Client) SetRandomizationFactorOption(random float64) func() error {
+func (c *Client) SetRandomizationFactorOption(random float64) InitClientOptions {
 	return func() error {
 		exponetial, ok := c.C.(*backoff.ExponentialBackOff)
 		if !ok {
@@ -99,7 +104,7 @@ func (c *Client) SetRandomizationFactorOption(random float64) func() error {
 }
 
 // SetMultiplierOption set backoff multiplier
-func (c *Client) SetMultiplierOption(multiplier float64) func() error {
+func (c *Client) SetMultiplierOption(multiplier float64) InitClientOptions {
 	return func() error {
 		exponetial, ok := c.C.(*backoff.ExponentialBackOff)
 		if !ok {
@@ -111,7 +116,7 @@ func (c *Client) SetMultiplierOption(multiplier float64) func() error {
 }
 
 // SetMaxIntervalOption set backoff max interval
-func (c *Client) SetMaxIntervalOption(maxInterval time.Duration) func() error {
+func (c *Client) SetMaxIntervalOption(maxInterval time.Duration) InitClientOptions {
 	return func() error {
 		exponetial, ok := c.C.(*backoff.ExponentialBackOff)
 		if !ok {
@@ -123,7 +128,7 @@ func (c *Client) SetMaxIntervalOption(maxInterval time.Duration) func() error {
 }
 
 // SetMaxElapsedTimeOption set backoff max elapsed time
-func (c *Client) SetMaxElapsedTimeOption(maxElapsedTime time.Duration) func() error {
+func (c *Client) SetMaxElapsedTimeOption(maxElapsedTime time.Duration) InitClientOptions {
 	return func() error {
 		exponetial, ok := c.C.(*backoff.ExponentialBackOff)
 		if !ok {
