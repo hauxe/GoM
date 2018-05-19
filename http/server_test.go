@@ -6,13 +6,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hauxe/gom/pool"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
 func TestServer(t *testing.T) {
-	t.Parallel()
 	server, err := CreateServer()
 	require.Nil(t, err)
 	require.NotNil(t, server)
@@ -50,19 +48,16 @@ func TestServer(t *testing.T) {
 			},
 		},
 	}
-	workerPool, err := pool.CreateWorker()
-	require.Nil(t, err)
-	require.Nil(t, workerPool.StartServer(workerPool.SetMaxWorkersOption(10)))
-	defer workerPool.StopServer()
 	server.Start(server.SetHandlerOption(routes...),
-		server.SetMiddlewareWorkerPoolOption(workerPool))
+		server.SetMiddlewareWorkerPoolOption(10))
+	// server.Start(server.SetHandlerOption(routes...))
 	defer server.Stop()
 	client, err := CreateClient()
 	require.Nil(t, err)
 	require.NotNil(t, client)
 	require.Nil(t, client.Connect())
 	defer client.Disconnect()
-	url := "http://" + server.S.Addr
+	url := "http://" + server.S.Addr + "/test1"
 	// send request
 	field1 := "error"
 	field2 := int64(12345)
@@ -90,35 +85,4 @@ func TestServer(t *testing.T) {
 	require.Equal(t, field2, d.Field2)
 	require.Equal(t, field3, d.Field3)
 	require.Equal(t, fieldRequire, d.FieldRequire)
-
-	/*t.Run("success validator", func(t *testing.T) {
-		t.Parallel()
-		// send request
-		field1 := "error"
-		field2 := int64(12345)
-		field3 := true
-		fieldRequire := true
-		resp, err := client.Send(context.Background(), http.MethodGet,
-			url, client.SetRequestOptionQuery(map[string]interface{}{
-				"field1":        field1,
-				"field2":        field2,
-				"field3":        field3,
-				"field_require": fieldRequire,
-			}))
-		require.Nil(t, err)
-		require.NotNil(t, resp)
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		dest := response{}
-		decoder := json.NewDecoder(resp.Body)
-		// numbers are represented as string instead of float64
-		decoder.UseNumber()
-		err = decoder.Decode(&dest)
-		require.Nil(t, err)
-		require.Equal(t, ErrorCodeSuccess, dest.ErrorCode)
-		d := dest.Data.Success
-		require.Equal(t, field1, d.Field1)
-		require.Equal(t, field2, d.Field2)
-		require.Equal(t, field3, d.Field3)
-		require.Equal(t, fieldRequire, d.FieldRequire)
-	})*/
 }

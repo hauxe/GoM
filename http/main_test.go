@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 )
 
+var mu sync.Mutex
 var sampleServers []*httptest.Server
 
 func CreateSampleServer(routes ...ServerRoute) *httptest.Server {
@@ -17,6 +19,8 @@ func CreateSampleServer(routes ...ServerRoute) *httptest.Server {
 		}
 	}
 	server := httptest.NewServer(mux)
+	mu.Lock()
+	defer mu.Unlock()
 	sampleServers = append(sampleServers, server)
 	return server
 }

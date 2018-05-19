@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"runtime"
 	"time"
 
 	lib "github.com/hauxe/gom/library"
@@ -101,7 +103,7 @@ func ParseParameters(r *http.Request, dst interface{}) error {
 // SendResponse encodes data as JSON object and returns it to client
 func SendResponse(w http.ResponseWriter, statusCode int, code errorCode,
 	message string, data map[string]interface{}) error {
-
+	log.Println(runtime.Caller(1))
 	w.Header().Set(HeaderContentType, ContentTypeJSON)
 	w.WriteHeader(statusCode)
 	ti := lib.TimeRFC3339(time.Now())

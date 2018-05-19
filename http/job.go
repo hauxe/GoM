@@ -13,6 +13,7 @@ type JobHandler struct {
 	w       http.ResponseWriter
 	r       *http.Request
 	handler http.HandlerFunc
+	c       chan struct{}
 }
 
 // Name get job name
@@ -31,5 +32,6 @@ func (job *JobHandler) Execute() error {
 		return errors.New("empty handler")
 	}
 	job.handler(job.w, job.r)
+	job.c <- struct{}{}
 	return nil
 }

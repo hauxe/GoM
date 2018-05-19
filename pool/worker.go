@@ -107,7 +107,7 @@ func (w *Worker) StartServer(options ...func() error) (err error) {
 		w.mux.Lock()
 		defer w.mux.Unlock()
 		w.isStopped = true
-		close(w.WorkerPool)
+		w.WorkerPool = nil
 	}()
 	wg.Wait()
 	return nil
@@ -120,14 +120,6 @@ func (w *Worker) StopServer() {
 
 // QueueJob queue a job with timeout
 func (w *Worker) QueueJob(job Job, timeout time.Duration) (err error) {
-	w.mux.RLock()
-	if w.isStopped {
-		err = errors.New("send job to a stopped worker")
-		w.ErrorLog(job, err)
-		w.mux.RUnlock()
-		return
-	}
-	w.mux.RUnlock()
 	var t <-chan time.Time
 	if timeout > 0 {
 		t = time.After(timeout)
@@ -141,6 +133,9 @@ func (w *Worker) QueueJob(job Job, timeout time.Duration) (err error) {
 		}
 	case <-t:
 		err = errors.Errorf("wait for worker timedout after %d", timeout)
+		w.ErrorLog(job, err)
+	case <-w.quit:
+		err = errors.New("queue job on closed worker")
 		w.ErrorLog(job, err)
 	}
 	return

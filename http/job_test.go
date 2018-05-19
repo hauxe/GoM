@@ -37,7 +37,9 @@ func TestExecute(t *testing.T) {
 	t.Parallel()
 	t.Run("error empty handler", func(t *testing.T) {
 		t.Parallel()
-		job := JobHandler{}
+		job := JobHandler{
+			c: make(chan struct{}, 1),
+		}
 		require.Error(t, job.Execute())
 	})
 
@@ -46,7 +48,7 @@ func TestExecute(t *testing.T) {
 		f := func(_ http.ResponseWriter, _ *http.Request) {
 
 		}
-		job := JobHandler{handler: f}
+		job := JobHandler{handler: f, c: make(chan struct{}, 1)}
 		require.Nil(t, job.Execute())
 	})
 }

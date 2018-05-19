@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -28,7 +29,7 @@ var decoder = schema.NewDecoder()
 
 const (
 	// default http server config
-	serverHost   = "0.0.0.0"
+	serverHost   = "localhost"
 	serverPort   = 8000
 	serveTLS     = false
 	certFile     = ""
@@ -56,6 +57,7 @@ type Server struct {
 	Mux         *http.ServeMux
 	TraceClient *trace.Client
 	Logger      sdklog.Factory
+	WorkerPools []*pool.Worker
 }
 
 // CreateServer creates HTTP server
@@ -123,14 +125,20 @@ func (s *Server) Start(options ...StartServerOptions) (err error) {
 		if s.Config.ServeTLS {
 			wg.Done()
 			if err = s.S.ListenAndServeTLS(s.Config.CertFile, s.Config.KeyFile); err != nil {
-				s.Logger.Bg().Info(fmt.Sprintf("Error start TLS HTTP server at: %s:%d",
-					s.Config.Host, s.Config.Port))
+				if err != http.ErrServerClosed {
+					s.Logger.Bg().Info(fmt.Sprintf("Error Start TLS HTTP server at: %s:%d",
+						s.Config.Host, s.Config.Port))
+					s.Logger.Bg().Error(err.Error())
+				}
 			}
 		} else {
 			wg.Done()
 			if err = s.S.ListenAndServe(); err != nil {
-				s.Logger.Bg().Info(fmt.Sprintf("Error start HTTP server at: %s:%d",
-					s.Config.Host, s.Config.Port))
+				if err != http.ErrServerClosed {
+					s.Logger.Bg().Info(fmt.Sprintf("Error Start HTTP server at: %s:%d",
+						s.Config.Host, s.Config.Port))
+					s.Logger.Bg().Error(err.Error())
+				}
 			}
 		}
 	}()
@@ -141,7 +149,11 @@ func (s *Server) Start(options ...StartServerOptions) (err error) {
 // Stop stops http server
 func (s *Server) Stop() error {
 	if s.S != nil {
-		return s.S.Close()
+		s.Logger.Bg().Info("shutting down")
+		return s.S.Shutdown(context.Background())
+	}
+	for _, workerPool := range s.WorkerPools {
+		workerPool.StopServer()
 	}
 	return nil
 }
@@ -186,6 +198,7 @@ func (s *Server) SetTracerOption(tracer *trace.Client) StartServerOptions {
 // SetHandlerOption set http server route handler
 func (s *Server) SetHandlerOption(routes ...ServerRoute) StartServerOptions {
 	return func() (err error) {
+		s.Logger.Bg().Info("setting up handler")
 		for _, route := range routes {
 			s.Mux.HandleFunc(route.Path, buildRouteHandler(route.Method, route.Validators, route.Handler))
 			s.Logger.Bg().Info("Registered route", zap.String("name", route.Name),
@@ -224,24 +237,58 @@ func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
 				r = r.WithContext(ctx)
 				span.Finish()
 			}
-			s.Handler.ServeHTTP(w, r)
+			s.Mux.ServeHTTP(w, r)
 		})
 		return nil
 	}
 }
 
 // SetMiddlewareWorkerPoolOption set http server uses worker pool
-func (s *Server) SetMiddlewareWorkerPoolOption(worker *pool.Worker) StartServerOptions {
+func (s *Server) SetMiddlewareWorkerPoolOption(maxWorkers int) StartServerOptions {
 	return func() (err error) {
+		handler := s.Handler
+		workerPool, err := pool.CreateWorker()
+		if err != nil {
+			return err
+		}
+		err = workerPool.StartServer(workerPool.SetMaxWorkersOption(maxWorkers))
+		if err != nil {
+			return err
+		}
+		s.WorkerPools = append(s.WorkerPools, workerPool)
 		s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			job := JobHandler{
 				name:    "handle http request",
 				r:       r,
 				w:       w,
-				handler: s.Handler.ServeHTTP,
+				handler: handler.ServeHTTP,
+				c:       make(chan struct{}, 1),
 			}
-			worker.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Second)
+			workerPool.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Second)
+			<-job.c
 		})
 		return nil
 	}
+}
+
+// SetupWorkerPoolHandler set up fast return and do hard job on worker
+func (s *Server) SetupWorkerPoolHandler(maxWorkers int, handler http.HandlerFunc) (http.HandlerFunc, error) {
+	workerPool, err := pool.CreateWorker()
+	if err != nil {
+		return nil, err
+	}
+	err = workerPool.StartServer(workerPool.SetMaxWorkersOption(maxWorkers))
+	if err != nil {
+		return nil, err
+	}
+	s.WorkerPools = append(s.WorkerPools, workerPool)
+	return func(w http.ResponseWriter, r *http.Request) {
+		job := JobHandler{
+			name:    "handle http request async",
+			r:       r,
+			w:       w,
+			handler: handler,
+		}
+		workerPool.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Second)
+	}, nil
 }
