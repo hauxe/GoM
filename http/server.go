@@ -214,6 +214,7 @@ func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
 		if s.TraceClient == nil {
 			return errors.New("option SetTracerOption must be set first")
 		}
+		handler := s.Handler
 		s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Try to join to a trace propagated in request.
 			wireContext, err := s.TraceClient.Tracer.Extract(
@@ -237,7 +238,7 @@ func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
 				r = r.WithContext(ctx)
 				span.Finish()
 			}
-			s.Mux.ServeHTTP(w, r)
+			handler.ServeHTTP(w, r)
 		})
 		return nil
 	}
