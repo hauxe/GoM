@@ -77,9 +77,9 @@ func (w *Worker) StartServer(options ...func() error) (err error) {
 					close(jobChannel)
 					return
 				}
-				w.mux.RUnlock()
 				// register the current worker into the worker queue.
 				w.WorkerPool <- jobChannel
+				w.mux.RUnlock()
 
 				select {
 				case job := <-jobChannel:
