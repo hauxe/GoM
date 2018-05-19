@@ -32,7 +32,7 @@ type Worker struct {
 }
 
 // CreateWorker create a worker pool
-func CreateWorker(options ...func(*environment.ENVConfig) error) (worker *Worker, err error) {
+func CreateWorker(options ...environment.CreateENVOptions) (worker *Worker, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "create env"))

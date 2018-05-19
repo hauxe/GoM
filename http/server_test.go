@@ -6,8 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hauxe/GoM/pool"
-
+	"github.com/hauxe/gom/pool"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
