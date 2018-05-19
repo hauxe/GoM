@@ -25,7 +25,6 @@ type Worker struct {
 	Config     *WorkerConfig
 	Logger     sdklog.Factory
 	WorkerPool chan chan Job
-	JobChannel chan Job
 	quit       chan struct{}
 	isStopped  bool
 	mux        sync.RWMutex
@@ -49,7 +48,6 @@ func CreateWorker(options ...environment.CreateENVOptions) (worker *Worker, err 
 	return &Worker{
 		Config:     &config,
 		WorkerPool: make(chan chan Job, config.MaxWorkers),
-		JobChannel: make(chan Job),
 		quit:       make(chan struct{}),
 		Logger:     sdklog.Factory{Logger: logger},
 	}, nil
@@ -71,12 +69,24 @@ func (w *Worker) StartServer(options ...func() error) (err error) {
 		wg.Add(1)
 		go func() {
 			wg.Done()
+			jobChannel := make(chan Job)
 			for {
+				w.mux.RLock()
+				if w.isStopped {
+					w.mux.RUnlock()
+					close(jobChannel)
+					return
+				}
+				w.mux.RUnlock()
 				// register the current worker into the worker queue.
-				w.WorkerPool <- w.JobChannel
+				w.WorkerPool <- jobChannel
 
 				select {
-				case job := <-w.JobChannel:
+				case job := <-jobChannel:
+					if job == nil {
+						w.ErrorLog(job, errors.New("job is nil"))
+						continue
+					}
 					// we have received a work request.
 					if err := job.Execute(); err != nil {
 						w.ErrorLog(job, err)
@@ -98,8 +108,6 @@ func (w *Worker) StartServer(options ...func() error) (err error) {
 		defer w.mux.Unlock()
 		w.isStopped = true
 		close(w.WorkerPool)
-		close(w.JobChannel)
-		return
 	}()
 	wg.Wait()
 	return nil

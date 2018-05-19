@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/hauxe/gom/environment"
@@ -116,18 +117,24 @@ func (s *Server) Start(options ...StartServerOptions) (err error) {
 	}
 	s.Logger.Bg().Info(fmt.Sprintf("Starting HTTP server at: %s:%d",
 		s.Config.Host, s.Config.Port))
-	if s.Config.ServeTLS {
-		if err = s.S.ListenAndServeTLS(s.Config.CertFile, s.Config.KeyFile); err != nil {
-			s.Logger.Bg().Info(fmt.Sprintf("Error start TLS HTTP server at: %s:%d",
-				s.Config.Host, s.Config.Port))
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+	go func() {
+		if s.Config.ServeTLS {
+			wg.Done()
+			if err = s.S.ListenAndServeTLS(s.Config.CertFile, s.Config.KeyFile); err != nil {
+				s.Logger.Bg().Info(fmt.Sprintf("Error start TLS HTTP server at: %s:%d",
+					s.Config.Host, s.Config.Port))
+			}
+		} else {
+			wg.Done()
+			if err = s.S.ListenAndServe(); err != nil {
+				s.Logger.Bg().Info(fmt.Sprintf("Error start HTTP server at: %s:%d",
+					s.Config.Host, s.Config.Port))
+			}
 		}
-	} else {
-		if err = s.S.ListenAndServe(); err != nil {
-			s.Logger.Bg().Info(fmt.Sprintf("Error start HTTP server at: %s:%d",
-				s.Config.Host, s.Config.Port))
-		}
-	}
-
+	}()
+	wg.Wait()
 	return nil
 }
 

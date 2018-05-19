@@ -134,7 +134,7 @@
     "pool",
     "trace"
   ]
-  revision = "613aa7f5b6ec55971eace55ad5a7653b7bbc76df"
+  revision = "a611409f18412dd47af4cbe39cda15451d7a1fd1"
 
 [[projects]]
   branch = "master"
