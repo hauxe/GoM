@@ -3,6 +3,7 @@ package trace
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 
 	"go.uber.org/zap"
@@ -41,13 +42,23 @@ func f3(ctx context.Context, tracer *Client) (err error) {
 
 func TestTrace(t *testing.T) {
 	t.Parallel()
+	receive := make(chan bool, 1)
+	routeReportTrace := ServerRoute{
+		Path: "/api/v1/spans",
+		Handler: func(w http.ResponseWriter, r *http.Request) {
+			receive <- true
+		},
+	}
+
+	server := CreateSampleServer(routeReportTrace)
 	tracer, err := CreateClient()
 	require.Nil(t, err)
 	require.NotNil(t, tracer)
 	require.Nil(t, tracer.Connect(tracer.SetServiceNameOption("dkjadasdlkasjdkjlasjdaks"),
 		tracer.SetHostPortOption("0.0.0.0", 0),
-		tracer.SetHTTPCollectorOption("http://localhost:9411/api/v1/spans")))
+		tracer.SetHTTPCollectorOption(server.URL+routeReportTrace.Path)))
 	ctx := context.Background()
 	f1(ctx, tracer)
 	require.Nil(t, tracer.Disconnect())
+	require.True(t, <-receive)
 }

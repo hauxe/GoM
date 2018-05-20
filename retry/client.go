@@ -48,7 +48,7 @@ func UseExponentialRetry() Func {
 }
 
 // Init init the retry client
-func (c *Client) Init(options ...InitClientOptions) error {
+func (c *Client) Init(options ...InitClientOptions) (err error) {
 	if c.C == nil {
 		return errors.New("retry client doesnt be created")
 	}

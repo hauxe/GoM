@@ -38,7 +38,7 @@ func TestExecute(t *testing.T) {
 		wg.Add(int(requestThreshold))
 		for i := int64(0); i < requestThreshold; i++ {
 			go func(i int64) {
-				err = client.Execute(context.Background(), t.Name(),
+				err := client.Execute(context.Background(), t.Name(),
 					func(_ context.Context) error {
 						if i%2 == 0 {
 							time.Sleep(2 * timeout)

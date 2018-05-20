@@ -148,7 +148,7 @@ func (e *ENV) scanStructENV(rv reflect.Value) (err error) {
 	var pointerErr error
 	var structErr error
 	prefix := ""
-	if e.Config != nil {
+	if e.Config != nil && e.Config.Prefix != "" {
 		prefix = "_" + e.Config.Prefix
 	}
 	for i := 0; i < rv.NumField(); i++ {
@@ -176,7 +176,7 @@ func (e *ENV) scanStructENV(rv reflect.Value) (err error) {
 		if n == 0 || tags[0] == "-" {
 			continue
 		}
-		if err = e.getFieldENV(rv.Type().Field(i).Name, rv.Field(i), tags[0]+prefix); err != nil {
+		if err = e.getFieldENV(rv.Type().Field(i).Name, rv.Field(i), prefix+tags[0]); err != nil {
 			return errors.Wrap(err, lib.StringTags("scan struct env"))
 		}
 	}
