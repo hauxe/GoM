@@ -1,0 +1,19 @@
+syntax = "proto3";
+option go_package = "grpc";
+
+// The TestSrv service definition.
+service TestSrv {
+    rpc Test (Request) returns (Response) {}
+}
+
+message Request {
+	string name = 1;
+	string avatar = 2;
+	string content = 3;
+}
+
+message Response {
+    int32 code = 1;
+    string content = 2;
+}
+
