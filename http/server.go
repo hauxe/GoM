@@ -77,11 +77,11 @@ func CreateServer(options ...environment.CreateENVOptions) (server *Server, err 
 	if err = env.Parse(&config); err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "parse env"))
 	}
-	logger, err := zap.NewDevelopment()
+	logger, err := sdklog.NewFactory()
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "get logger"))
 	}
-	return &Server{Config: &config, Logger: sdklog.Factory{Logger: logger}}, nil
+	return &Server{Config: &config, Logger: logger}, nil
 }
 
 // Start starts running http server

@@ -13,7 +13,6 @@ import (
 	"github.com/hauxe/gom/environment"
 
 	"github.com/opentracing/opentracing-go"
-	"go.uber.org/zap"
 
 	lib "github.com/hauxe/gom/library"
 	sdklog "github.com/hauxe/gom/log"
@@ -65,11 +64,11 @@ func CreateClient(options ...environment.CreateENVOptions) (client *Client, err 
 	if err = env.Parse(&config); err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "parse env"))
 	}
-	logger, err := zap.NewDevelopment()
+	logger, err := sdklog.NewFactory()
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "get logger"))
 	}
-	return &Client{Config: &config, Logger: sdklog.Factory{Logger: logger}}, nil
+	return &Client{Config: &config, Logger: logger}, nil
 }
 
 // Connect create client connection

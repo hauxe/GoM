@@ -40,7 +40,7 @@ func CreateWorker(options ...environment.CreateENVOptions) (worker *Worker, err 
 	if err = env.Parse(&config); err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create worker", "parse env"))
 	}
-	logger, err := zap.NewDevelopment()
+	logger, err := sdklog.NewFactory()
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create worker", "get logger"))
 	}
@@ -49,7 +49,7 @@ func CreateWorker(options ...environment.CreateENVOptions) (worker *Worker, err 
 		Config:     &config,
 		WorkerPool: make(chan chan Job, config.MaxWorkers),
 		quit:       make(chan struct{}),
-		Logger:     sdklog.Factory{Logger: logger},
+		Logger:     logger,
 	}, nil
 }
 

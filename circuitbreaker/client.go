@@ -35,11 +35,11 @@ func CreateClient(options ...CreateClientOptions) (*Client, error) {
 			return nil, errors.Wrap(err, lib.StringTags("create env", "option error"))
 		}
 	}
-	logger, err := zap.NewDevelopment()
+	logger, err := sdklog.NewFactory()
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "get logger"))
 	}
-	return &Client{manager: &manager, Logger: sdklog.Factory{Logger: logger}}, nil
+	return &Client{manager: &manager, Logger: logger}, nil
 }
 
 // SetDefaultCircuitProperty set default circuit constructor

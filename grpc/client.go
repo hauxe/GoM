@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 
 	lib "github.com/hauxe/gom/library"
 	sdklog "github.com/hauxe/gom/log"
@@ -39,13 +38,13 @@ type Client struct {
 // CreateClient creates GRPC client
 func CreateClient() (client *Client, err error) {
 	config := ClientConfig{clientHost, clientPort}
-	logger, err := zap.NewDevelopment()
+	logger, err := sdklog.NewFactory()
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create client", "get logger"))
 	}
 	return &Client{
 		Config:      &config,
-		Logger:      sdklog.Factory{Logger: logger},
+		Logger:      logger,
 		DialOptions: []g.DialOption{g.WithInsecure()},
 	}, nil
 }

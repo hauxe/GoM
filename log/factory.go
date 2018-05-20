@@ -30,8 +30,10 @@ type Factory struct {
 }
 
 // NewFactory creates a new Factory.
-func NewFactory(logger *zap.Logger) Factory {
-	return Factory{Logger: logger}
+func NewFactory() (Factory, error) {
+	logger, err := zap.NewDevelopment(zap.AddCaller(), zap.AddCallerSkip(1))
+	return Factory{Logger: logger}, err
+
 }
 
 // Bg creates a context-unaware logger.
