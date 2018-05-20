@@ -61,6 +61,7 @@ func (c *Client) Connect(options ...StartClientOptions) (err error) {
 	}
 	url := lib.GetURL(c.Config.Host, c.Config.Port)
 	c.C, err = g.Dial(url, c.DialOptions...)
+
 	return err
 }
 

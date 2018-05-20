@@ -3,8 +3,8 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/hauxe/gom/environment"
@@ -16,13 +16,15 @@ import (
 	sdklog "github.com/hauxe/gom/log"
 	"github.com/hauxe/gom/pool"
 	"github.com/hauxe/gom/trace"
-	"go.uber.org/zap"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 // StartServerOptions type indicates start server options
 type StartServerOptions func() error
+
+// RegisterService type indicates register service
+type RegisterService func(*g.Server) error
 
 const (
 	// default grpc server config
@@ -48,10 +50,11 @@ type Server struct {
 	Logger        sdklog.Factory
 	TraceClient   *trace.Client
 	ServerOptions []g.ServerOption
+	WorkerPools   []*pool.Worker
 }
 
 // CreateServer creates GRPC server
-func CreateServer(options ...environment.CreateENVOptions) error) (server *Server, err error) {
+func CreateServer(options ...environment.CreateENVOptions) (server *Server, err error) {
 	env, err := environment.CreateENV(options...)
 	if err != nil {
 		return nil, errors.Wrap(err, lib.StringTags("create server", "create env"))
@@ -68,7 +71,7 @@ func CreateServer(options ...environment.CreateENVOptions) error) (server *Serve
 }
 
 // Start starts running grpc server
-func (s *Server) Start(options ...StartServerOptions) (err error) {
+func (s *Server) Start(services []RegisterService, options ...StartServerOptions) (err error) {
 	if s.Config == nil {
 		return errors.New(lib.StringTags("start server", "config not found"))
 	}
@@ -77,20 +80,31 @@ func (s *Server) Start(options ...StartServerOptions) (err error) {
 			return errors.Wrap(err, lib.StringTags("start server", "option error"))
 		}
 	}
+	s.S = g.NewServer(s.ServerOptions...)
+	for _, srv := range services {
+		if err = srv(s.S); err != nil {
+			return errors.Wrap(err, lib.StringTags("start server", "register service error"))
+		}
+	}
+	if s.Config.EnableServiceDiscovery {
+		// Register reflection service on gRPC server.
+		reflection.Register(s.S)
+	}
 	url := lib.GetURL(s.Config.Host, s.Config.Port)
 	s.Conn, err = net.Listen("tcp", url)
 	if err != nil {
 		return errors.Errorf("[%s]failed to listen grpc: %v", url, err)
 	}
-	s.S = g.NewServer()
-	if s.Config.EnableServiceDiscovery {
-		// Register reflection service on gRPC server.
-		reflection.Register(s.S)
-	}
-	if err := s.S.Serve(s.Conn); err != nil {
-		return errors.Errorf("Failed to serve: %v", err)
-	}
-	log.Println(fmt.Sprintf("Started gRPC server at: %s:%d, with service discovery enabling is %v",
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		if err := s.S.Serve(s.Conn); err != nil {
+			s.Logger.Bg().Info(fmt.Sprintf("Failed to serve: %v", err))
+		}
+	}()
+	wg.Wait()
+	s.Logger.Bg().Info(fmt.Sprintf("Started gRPC server at: %s:%d, with service discovery enabling is %v",
 		s.Config.Host, s.Config.Port, s.Config.EnableServiceDiscovery))
 	return nil
 }
@@ -102,6 +116,9 @@ func (s *Server) Stop() error {
 	}
 	if s.Conn != nil {
 		return s.Conn.Close()
+	}
+	for _, workerPool := range s.WorkerPools {
+		workerPool.StopServer()
 	}
 	return nil
 }
@@ -124,7 +141,7 @@ func (s *Server) SetTracerOption(tracer *trace.Client) StartServerOptions {
 
 // SetMiddlewareTracerOption set grpc tracer middleware
 func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
-	return StartServerOptions {
+	return func() error {
 		if s.TraceClient == nil {
 			return errors.New("option SetTracerOption must be set first")
 		}
@@ -135,23 +152,31 @@ func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
 }
 
 // SetMiddlewarePoolWorkerOption set grpc pool worker middleware
-func (s *Server) SetMiddlewarePoolWorkerOption(worker *pool.Worker) StartServerOptions {
+func (s *Server) SetMiddlewarePoolWorkerOption(maxWorkers int) StartServerOptions {
 	return func() error {
-		if s.TraceClient == nil {
-			return errors.New("option SetTracerOption must be set first")
+		workerPool, err := pool.CreateWorker()
+		if err != nil {
+			return err
 		}
+		err = workerPool.StartServer(workerPool.SetMaxWorkersOption(maxWorkers))
+		if err != nil {
+			return err
+		}
+		s.WorkerPools = append(s.WorkerPools, workerPool)
 		interceptor := func(ctx context.Context, req interface{}, info *g.UnaryServerInfo, handler g.UnaryHandler) (resp interface{}, err error) {
 			job := JobHandler{
-				name:    info.FullMethod,
+				name:    "interceptor" + info.FullMethod,
 				ctx:     ctx,
 				req:     req,
 				handler: handler,
+				c:       make(chan JobResult, 1),
 			}
-			err = worker.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Millisecond)
+			err = workerPool.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Millisecond)
 			if err != nil {
 				return nil, errors.Wrap(err, lib.StringTags("pool worker middleware"))
 			}
 			result := <-job.c
+			s.Logger.Bg().Info(fmt.Sprintf("%#v", result))
 			return result.resp, result.err
 		}
 		serverOption := g.UnaryInterceptor(interceptor)
