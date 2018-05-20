@@ -1,5 +1,6 @@
 # GoM
 
+[![CircleCI](https://circleci.com/gh/hauxe/GoM.svg?style=svg)](https://circleci.com/gh/hauxe/GoM)
 Go microservice library
 
 ## New Features
