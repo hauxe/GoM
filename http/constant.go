@@ -1,14 +1,16 @@
 package http
 
-type errorCode int
+// ErrorCode type error code
+type ErrorCode int
 
 // defines server response error codes
 const (
-	ErrorCodeFailed  errorCode = -1
-	ErrorCodeSuccess errorCode = iota
+	ErrorCodeFailed ErrorCode = iota - 1
+	ErrorCodeSuccess
 	ErrorCodeInternalError
 	ErrorCodeThirdPartyError
 	ErrorCodeMalformedMethod
+	ErrorCodeBadRequest
 	ErrorCodeValidationFailed
 )
 

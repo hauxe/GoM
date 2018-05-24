@@ -87,6 +87,12 @@
   version = "v6.10.2"
 
 [[projects]]
+  name = "github.com/go-sql-driver/mysql"
+  packages = ["."]
+  revision = "a0583e0143b1624142adab07e0e97fe106d99561"
+  version = "v1.3"
+
+[[projects]]
   name = "github.com/gogo/protobuf"
   packages = ["proto"]
   revision = "1adfc126b41513cc696b209667c8656ea7aac67c"
@@ -135,6 +141,15 @@
     "trace"
   ]
   revision = "c40f481a9d995997798057137e312a8973595c31"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/jmoiron/sqlx"
+  packages = [
+    ".",
+    "reflectx"
+  ]
+  revision = "2aeb6a910c2b94f2d5eb53d9895d80e27264ec41"
 
 [[projects]]
   branch = "master"
@@ -315,6 +330,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "db5be703e6370b129ffd2b0715eed9053b44d834c0623a4ec185bea81eccb544"
+  inputs-digest = "a28b0cde980b5e0139da59a0ce2b8958b4acbcad91d69e45efcb210cac9198ce"
   solver-name = "gps-cdcl"
   solver-version = 1

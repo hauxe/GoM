@@ -28,7 +28,7 @@ type responseData struct {
 }
 
 type response struct {
-	ErrorCode    errorCode        `json:"error_code"`
+	ErrorCode    ErrorCode        `json:"error_code"`
 	ErrorMessage string           `json:"error_message"`
 	Data         responseData     `json:"data"`
 	Time         *lib.TimeRFC3339 `json:"time"`
