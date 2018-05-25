@@ -58,6 +58,9 @@ type Server struct {
 	TraceClient *trace.Client
 	Logger      sdklog.Factory
 	WorkerPools []*pool.Worker
+	URL         string
+	Routes      map[string]map[string]http.HandlerFunc
+	routesMux   sync.RWMutex
 }
 
 // CreateServer creates HTTP server
@@ -123,6 +126,7 @@ func (s *Server) Start(options ...StartServerOptions) (err error) {
 	wg.Add(1)
 	go func() {
 		if s.Config.ServeTLS {
+			s.URL = fmt.Sprintf("%s://%s", "https", s.S.Addr)
 			wg.Done()
 			if err = s.S.ListenAndServeTLS(s.Config.CertFile, s.Config.KeyFile); err != nil {
 				if err != http.ErrServerClosed {
@@ -132,6 +136,7 @@ func (s *Server) Start(options ...StartServerOptions) (err error) {
 				}
 			}
 		} else {
+			s.URL = fmt.Sprintf("%s://%s", "http", s.S.Addr)
 			wg.Done()
 			if err = s.S.ListenAndServe(); err != nil {
 				if err != http.ErrServerClosed {
@@ -168,6 +173,15 @@ func (s *Server) InitHandler() error {
 	return nil
 }
 
+// SetHostPortOption set http server timeout
+func (s *Server) SetHostPortOption(host string, port int) StartServerOptions {
+	return func() (err error) {
+		s.Config.Host = host
+		s.Config.Port = port
+		return nil
+	}
+}
+
 // SetTimeoutOption set http server timeout
 func (s *Server) SetTimeoutOption(read, write int) StartServerOptions {
 	return func() (err error) {
@@ -200,12 +214,52 @@ func (s *Server) SetHandlerOption(routes ...ServerRoute) StartServerOptions {
 	return func() (err error) {
 		s.Logger.Bg().Info("setting up handler")
 		for _, route := range routes {
-			s.Mux.HandleFunc(route.Path, buildRouteHandler(route.Method, route.Validators, route.Handler))
+			handler := s.BuildHandler(&route)
+			if handler != nil {
+				s.Mux.HandleFunc(route.Path, handler)
+			}
 			s.Logger.Bg().Info("Registered route", zap.String("name", route.Name),
 				zap.String("method", route.Method), zap.String("path", route.Path))
 		}
 		return nil
 	}
+}
+
+// BuildHandler build http handler
+func (s *Server) BuildHandler(route *ServerRoute) (handler http.HandlerFunc) {
+	s.routesMux.Lock()
+	defer s.routesMux.Unlock()
+	if s.Routes == nil {
+		s.Routes = make(map[string]map[string]http.HandlerFunc)
+	}
+	if _, existed := s.Routes[route.Path]; !existed {
+		s.Routes[route.Path] = make(map[string]http.HandlerFunc)
+		handler = func(w http.ResponseWriter, r *http.Request) {
+			// set response headers
+			w.Header().Set(HeaderAllowOrigin, allowOrigins)
+			w.Header().Set(HeaderAllowCredentials, allowCredentials)
+			w.Header().Set(HeaderExposeHeaders, exposeHeaders)
+
+			// preflight request
+			if r.Method == http.MethodOptions {
+				w.Header().Set(HeaderAllowHeaders, allowHeaders)
+				w.Header().Set(HeaderAllowMethods, allowMethods)
+				SendResponse(w, http.StatusOK, ErrorCodeSuccess, "ok", nil)
+				return
+			}
+			s.routesMux.RLock()
+			handler, existed := s.Routes[route.Path][route.Method]
+			s.routesMux.RUnlock()
+			if !existed {
+				SendResponse(w, http.StatusMethodNotAllowed, ErrorCodeMalformedMethod,
+					"method is not correct for the requested route", nil)
+				return
+			}
+			handler(w, r)
+		}
+	}
+	s.Routes[route.Path][route.Method] = buildRouteHandler(route.Method, route.Validators, route.Handler)
+	return
 }
 
 // SetMiddlewareTracerOption set http server middleware type tracer

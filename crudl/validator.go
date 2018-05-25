@@ -6,17 +6,26 @@ import (
 
 	"github.com/pkg/errors"
 
-	gomHTTP "github.com/hauxe/GoM/http"
+	gomHTTP "github.com/hauxe/gom/http"
 )
 
-func validatePrimaryKey(pk string) gomHTTP.ParamValidator {
+func validatePrimaryKey(pk int) gomHTTP.ParamValidator {
 	return func(_ context.Context, obj interface{}) error {
-		m, ok := obj.(map[string]interface{})
-		if !ok {
-			return errors.Errorf("invalid type %s of parameter", reflect.TypeOf(obj).String())
+		rv := reflect.ValueOf(obj)
+		rv = reflect.Indirect(rv)
+		pk := rv.Field(pk)
+		if !pk.CanInterface() {
+			return errors.Errorf("missing or invalid primary key")
 		}
-		if _, ok = m[pk]; !ok {
-			return errors.Errorf("missing primary key %s", pk)
+		switch pk.Kind() {
+		case reflect.Int64:
+			if pk.Int() == 0 {
+				return errors.Errorf("missing primary key")
+			}
+		case reflect.String:
+			if pk.String() == "" {
+				return errors.Errorf("missing primary key")
+			}
 		}
 		return nil
 	}

@@ -1,34 +1,39 @@
 package crudl
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"sync"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
 
-	gomHTTP "github.com/hauxe/GoM/http"
-	gomMySQL "github.com/hauxe/GoM/mysql"
+	gomHTTP "github.com/hauxe/gom/http"
+	gomMySQL "github.com/hauxe/gom/mysql"
 )
 
 var mu sync.Mutex
-var sampleServers []*httptest.Server
+var sampleServers []*gomHTTP.Server
 var sampleDB *sqlx.DB
 
-func CreateSampleServer(routes ...gomHTTP.ServerRoute) *httptest.Server {
-	mux := http.NewServeMux()
-	for _, route := range routes {
-		if route.Handler != nil {
-			mux.HandleFunc(route.Path, route.Handler)
-		}
-	}
-	server := httptest.NewServer(mux)
+func CreateSampleServer(routes ...gomHTTP.ServerRoute) (*gomHTTP.Server, error) {
 	mu.Lock()
 	defer mu.Unlock()
+	host := "localhost"
+	port := 1234
+	if len(sampleServers) > 0 {
+		lastServer := sampleServers[len(sampleServers)-1]
+		port = lastServer.Config.Port + 1
+	}
+	server, err := gomHTTP.CreateServer()
+	if err != nil {
+		return nil, err
+	}
+	err = server.Start(server.SetHostPortOption(host, port), server.SetHandlerOption(routes...))
+	if err != nil {
+		return nil, err
+	}
 	sampleServers = append(sampleServers, server)
-	return server
+	return server, nil
 }
 
 func TestMain(m *testing.M) {
@@ -45,7 +50,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	// close all sample servers
 	for _, server := range sampleServers {
-		server.Close()
+		server.Stop()
 	}
 	os.Exit(code)
 }

@@ -3,6 +3,7 @@ package crudl
 import (
 	"reflect"
 	"strings"
+	"sync"
 
 	sdklog "github.com/hauxe/gom/log"
 	"github.com/jmoiron/sqlx"
@@ -40,6 +41,12 @@ type Validator func(method string, obj interface{}) error
 
 type crud int
 
+type field struct {
+	name     string
+	index    int
+	jsonName string
+}
+
 // CRUD constant type
 const (
 	CREATE crud = iota
@@ -59,24 +66,29 @@ type Config struct {
 	U               bool
 	D               bool
 	Validators      map[string]Validator
-	fields          []string
-	createFields    []string
-	updateFields    []string
-	selectFields    []string
-	listFields      []string
-	pk              string
+	fields          []*field
+	createFields    []*field
+	updateFields    []*field
+	selectFields    []*field
+	listFields      []*field
+	pk              *field
 	fieldValidators map[string]string
 	sqlCRUDCreate   string
 	sqlCRUDRead     string
 	sqlCRUDUpdate   string
 	sqlCRUDDelete   string
 	sqlCRUDList     string
+	createdFields   []*field
+	updatedFields   []*field
+	selectedFields  []*field
+	listedFields    []*field
+	validatorMux    sync.Mutex
 }
 
 // CRUD defines crud properties
 type CRUD struct {
 	Config *Config
-	Logger *sdklog.Factory
+	Logger sdklog.Factory
 }
 
 // scanStructMySQL scan sql row by struct
@@ -95,41 +107,45 @@ func (crud *CRUD) scanStructMySQL(rv reflect.Value) (err error) {
 		if rv.Field(i).Kind() == reflect.Ptr && rv.Field(i).Elem().Kind() == reflect.Struct {
 			continue
 		}
-		field := tags[0]
-		if field == "" {
-			// search for tag name in json instead
-			jsonTag, ok := rv.Type().Field(i).Tag.Lookup("json")
-			if ok && jsonTag != "" {
-				jsons := strings.Split(jsonTag, ",")
-				field = jsons[0]
+		f := field{
+			index: i,
+			name:  tags[0],
+		}
+		// search for tag name in json instead
+		jsonTag, ok := rv.Type().Field(i).Tag.Lookup("json")
+		if ok && jsonTag != "" {
+			jsons := strings.Split(jsonTag, ",")
+			f.jsonName = jsons[0]
+			if f.name == "" {
+				f.name = f.jsonName
 			}
 		}
-		if field == "" {
+		if f.name == "" {
 			// skip this field
 			continue
 		}
-		crud.Config.fields = append(crud.Config.fields, field)
+		crud.Config.fields = append(crud.Config.fields, &f)
 		if crud.Config.fieldValidators == nil {
 			crud.Config.fieldValidators = make(map[string]string)
 		}
 		for j := 1; j < n; j++ {
 			switch tags[j] {
 			case sqlCreate:
-				crud.Config.createFields = append(crud.Config.createFields, field)
+				crud.Config.createFields = append(crud.Config.createFields, &f)
 			case sqlUpdate:
-				crud.Config.updateFields = append(crud.Config.updateFields, field)
+				crud.Config.updateFields = append(crud.Config.updateFields, &f)
 			case sqlSelect:
-				crud.Config.selectFields = append(crud.Config.selectFields, field)
+				crud.Config.selectFields = append(crud.Config.selectFields, &f)
 			case sqlList:
-				crud.Config.listFields = append(crud.Config.listFields, field)
+				crud.Config.listFields = append(crud.Config.listFields, &f)
 			case sqlPK:
-				crud.Config.pk = field
+				crud.Config.pk = &f
 			default:
 				vals := strings.Split(tags[j], "=")
 				if len(vals) == 2 {
 					switch vals[0] {
 					case sqlValidator:
-						crud.Config.fieldValidators[field] = vals[1]
+						crud.Config.fieldValidators[f.name] = vals[1]
 					}
 				}
 			}
@@ -145,25 +161,30 @@ func (crud *CRUD) Create(data interface{}) error {
 	if err != nil {
 		return errors.Wrap(err, "error crud create")
 	}
-	if crud.Config.pk != "" {
-		// set primary key
-		rv := reflect.ValueOf(data)
-		rv = reflect.Indirect(rv)
-		pk := rv.FieldByName(crud.Config.pk)
-		if pk.CanSet() {
-			id, err := result.LastInsertId()
-			if err != nil {
-				return errors.Wrap(err, "error get last insert id at crud create")
-			}
-			pk.SetInt(id)
+	// set primary key
+	rv := reflect.ValueOf(data)
+	rv = reflect.Indirect(rv)
+	pk := rv.Field(crud.Config.pk.index)
+	if pk.CanSet() && pk.Kind() == reflect.Int64 {
+		id, err := result.LastInsertId()
+		if err != nil {
+			return errors.Wrap(err, "error get last insert id at crud create")
 		}
+		pk.SetInt(id)
 	}
 	return nil
 }
 
 // Read read data
-func (crud *CRUD) Read(pk interface{}) (interface{}, error) {
-	rows, err := crud.Config.DB.Queryx(crud.Config.sqlCRUDRead, pk)
+func (crud *CRUD) Read(data interface{}) (interface{}, error) {
+	rv := reflect.ValueOf(data)
+	rv = reflect.Indirect(rv)
+	pk := rv.Field(crud.Config.pk.index)
+	if !pk.CanInterface() {
+		return nil, errors.Errorf("table %s with primary key has wrong interface type",
+			crud.Config.TableName, crud.Config.pk.index)
+	}
+	rows, err := crud.Config.DB.Queryx(crud.Config.sqlCRUDRead, pk.Interface())
 	if err != nil {
 		return nil, errors.Wrap(err, "error crud read")
 	}
@@ -174,7 +195,11 @@ func (crud *CRUD) Read(pk interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "error crud scan")
 		}
-		return obj, nil
+		re, err := buildListOfFields(obj, crud.Config.selectedFields)
+		if err != nil {
+			return nil, errors.Wrap(err, "error build list of fields")
+		}
+		return re, nil
 	}
 	return nil, nil
 }
@@ -189,8 +214,15 @@ func (crud *CRUD) Update(data interface{}) error {
 }
 
 // Delete delete row
-func (crud *CRUD) Delete(pk interface{}) (int64, error) {
-	result, err := crud.Config.DB.Exec(crud.Config.sqlCRUDDelete, pk)
+func (crud *CRUD) Delete(data interface{}) (int64, error) {
+	rv := reflect.ValueOf(data)
+	rv = reflect.Indirect(rv)
+	pk := rv.Field(crud.Config.pk.index)
+	if !pk.CanInterface() {
+		return 0, errors.Errorf("table %s with primary key has wrong interface type",
+			crud.Config.TableName, crud.Config.pk.index)
+	}
+	result, err := crud.Config.DB.Exec(crud.Config.sqlCRUDDelete, pk.Interface())
 	if err != nil {
 		return 0, errors.Wrap(err, "error crud delete")
 	}
@@ -213,11 +245,29 @@ func (crud *CRUD) List(pageID, perPage int64) ([]interface{}, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "error crud scan")
 		}
-		result = append(result, obj)
+		re, err := buildListOfFields(obj, crud.Config.listedFields)
+		if err != nil {
+			return nil, errors.Wrap(err, "error build list of fields")
+		}
+		result = append(result, re)
 	}
 	err = rows.Err()
 	if err != nil {
 		return nil, errors.Wrap(err, "error crud loop rows list")
+	}
+	return result, nil
+}
+
+func buildListOfFields(obj interface{}, fields []*field) (map[string]interface{}, error) {
+	result := make(map[string]interface{}, len(fields))
+	rv := reflect.ValueOf(obj)
+	rv = reflect.Indirect(rv)
+	for _, field := range fields {
+		f := rv.Field(field.index)
+		if !f.CanInterface() {
+			return nil, errors.Errorf("field %s can not interface", field.name)
+		}
+		result[field.name] = f.Interface()
 	}
 	return result, nil
 }

@@ -149,24 +149,6 @@ func SendError(w http.ResponseWriter, err error) error {
 
 func buildRouteHandler(method string, validators []ParamValidator, handle http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// set response headers
-		w.Header().Set(HeaderAllowOrigin, allowOrigins)
-		w.Header().Set(HeaderAllowCredentials, allowCredentials)
-		w.Header().Set(HeaderExposeHeaders, exposeHeaders)
-
-		// preflight request
-		if r.Method == http.MethodOptions {
-			w.Header().Set(HeaderAllowHeaders, allowHeaders)
-			w.Header().Set(HeaderAllowMethods, allowMethods)
-			SendResponse(w, http.StatusOK, ErrorCodeSuccess, "ok", nil)
-			return
-		}
-
-		if r.Method != method {
-			SendResponse(w, http.StatusMethodNotAllowed, ErrorCodeMalformedMethod,
-				"method is not correct for the requested route", nil)
-			return
-		}
 		ctx := r.Context()
 		// inject validator to request context
 		if len(validators) > 0 {

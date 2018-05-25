@@ -11,7 +11,7 @@ type StringSlice []string
 
 // Scan sqlx JSON scan method
 func (s *StringSlice) Scan(val interface{}) error {
-	s = &StringSlice{}
+	*s = StringSlice{}
 	switch v := val.(type) {
 	case []byte:
 		return json.Unmarshal(v, &s)

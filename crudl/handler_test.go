@@ -9,18 +9,24 @@ import (
 
 	"github.com/pkg/errors"
 
-	gomHTTP "github.com/hauxe/GoM/http"
-	gomMySQL "github.com/hauxe/GoM/mysql"
+	gomHTTP "github.com/hauxe/gom/http"
 	lib "github.com/hauxe/gom/library"
+	gomMySQL "github.com/hauxe/gom/mysql"
 	"github.com/stretchr/testify/require"
 )
 
 var sampleValidator = func(method string, obj interface{}) (err error) {
 	if method == "create" {
-		if c, ok := obj.(create); ok {
+		if c, ok := obj.(*create); ok {
 			if c.Name == "" {
 				return errors.New("require name")
 			}
+			if c.Description == "test_failed_validator" {
+				return errors.New("sample validation error")
+			}
+		}
+	} else if method == "update" {
+		if c, ok := obj.(*update); ok {
 			if c.Description == "test_failed_validator" {
 				return errors.New("sample validation error")
 			}
@@ -32,21 +38,21 @@ var sampleValidator = func(method string, obj interface{}) (err error) {
 type create struct {
 	ID          int64                `json:"id" db:"id,pk"`
 	Name        string               `json:"name" db:"name,create"`
-	Age         int                  `json:"age" db:"age,create,optional"`
-	Description string               `json:"description" db:"description,create,optional"`
-	Info        gomMySQL.StringMap   `json:"info" db:"info,create,optional"`
-	List        gomMySQL.StringSlice `json:"list" db:"list,create,optional"`
+	Age         int                  `json:"age" db:"age,create"`
+	Description string               `json:"description" db:"description,create,validator=description"`
+	Info        gomMySQL.StringMap   `json:"info" db:"info,create"`
+	List        gomMySQL.StringSlice `json:"list" db:"list,create"`
 	CreatedAt   time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at" db:"updated_at"`
 }
 
 type get struct {
-	ID          int64                `json:"id" db:"id,pk"`
+	ID          int64                `json:"id" db:"id,pk" schema:"id,required"`
 	Name        string               `json:"name" db:"name,create"`
-	Age         int                  `json:"age" db:"age,create,optional"`
-	Description string               `json:"description" db:"description,create,optional"`
-	Info        gomMySQL.StringMap   `json:"info" db:"info,create,optional"`
-	List        gomMySQL.StringSlice `json:"list" db:"list,create,optional"`
+	Age         int                  `json:"age" db:"age,create"`
+	Description string               `json:"description" db:"description,create,validator=description"`
+	Info        gomMySQL.StringMap   `json:"info" db:"info,create"`
+	List        gomMySQL.StringSlice `json:"list" db:"list,create"`
 	CreatedAt   time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at" db:"updated_at"`
 }
@@ -54,10 +60,10 @@ type get struct {
 type update struct {
 	ID          int64                `json:"id" db:"id,pk"`
 	Name        string               `json:"name" db:"name,create"`
-	Age         int                  `json:"age" db:"age,create,update,optional"`
-	Description string               `json:"description" db:"description,create,update,optional"`
-	Info        gomMySQL.StringMap   `json:"info" db:"info,create,update,optional"`
-	List        gomMySQL.StringSlice `json:"list" db:"list,create,update,optional"`
+	Age         int                  `json:"age" db:"age,create,update"`
+	Description string               `json:"description" db:"description,create,update,validator=description"`
+	Info        gomMySQL.StringMap   `json:"info" db:"info,create,update"`
+	List        gomMySQL.StringSlice `json:"list" db:"list,create,update"`
 	CreatedAt   time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at" db:"updated_at"`
 }
@@ -65,10 +71,10 @@ type update struct {
 type delete struct {
 	ID          int64                `json:"id" db:"id,pk"`
 	Name        string               `json:"name" db:"name,create"`
-	Age         int                  `json:"age" db:"age,create,optional"`
-	Description string               `json:"description" db:"description,create,optional"`
-	Info        gomMySQL.StringMap   `json:"info" db:"info,create,optional"`
-	List        gomMySQL.StringSlice `json:"list" db:"list,create,optional"`
+	Age         int                  `json:"age" db:"age,create"`
+	Description string               `json:"description" db:"description,create,validator=description"`
+	Info        gomMySQL.StringMap   `json:"info" db:"info,create"`
+	List        gomMySQL.StringSlice `json:"list" db:"list,create"`
 	CreatedAt   time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at" db:"updated_at"`
 }
@@ -76,10 +82,10 @@ type delete struct {
 type list struct {
 	ID          int64                `json:"id" db:"id,pk"`
 	Name        string               `json:"name" db:"name,create"`
-	Age         int                  `json:"age" db:"age,create,optional"`
-	Description string               `json:"description" db:"description,create,optional"`
-	Info        gomMySQL.StringMap   `json:"info" db:"info,create,optional"`
-	List        gomMySQL.StringSlice `json:"list" db:"list,create,optional"`
+	Age         int                  `json:"age" db:"age,create"`
+	Description string               `json:"description" db:"description,create,validator=description"`
+	Info        gomMySQL.StringMap   `json:"info" db:"info,create"`
+	List        gomMySQL.StringSlice `json:"list" db:"list,create"`
 	CreatedAt   time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time            `json:"updated_at" db:"updated_at"`
 }
@@ -140,10 +146,11 @@ func TestCRUDCreateHandler(t *testing.T) {
 	require.Nil(t, err)
 	require.Len(t, routes, 1)
 	require.NotNil(t, crud)
-	server := CreateSampleServer(routes...)
+	server, err := CreateSampleServer(routes...)
+	require.Nil(t, err)
 	require.NotNil(t, server)
 
-	validData := create{
+	validData := &create{
 		Name:        "test_create_handler",
 		Age:         11,
 		Description: "test_create_handle_description",
@@ -157,16 +164,16 @@ func TestCRUDCreateHandler(t *testing.T) {
 		"info":        "invalid",
 		"list":        "invalid",
 	}
-	validNoOptionalData := create{
+	validNoOptionalData := &create{
 		Name: "create_handler_no_optional",
 	}
-	missingRequiredParamData := create{
+	missingRequiredParamData := &create{
 		Age:         11,
 		Description: "description",
 		Info:        gomMySQL.StringMap{"a": "a", "b": "b", "c": "c"},
 		List:        gomMySQL.StringSlice{"a", "b", "c"},
 	}
-	failedValidatorData := create{
+	failedValidatorData := &create{
 		Name:        "test_create_handler",
 		Age:         11,
 		Description: "test_failed_validator",
@@ -191,27 +198,27 @@ func TestCRUDCreateHandler(t *testing.T) {
 	require.NotNil(t, client)
 	client.Connect()
 
-	for _, testcase := range testCases {
-		tc := testcase
+	for _, testCase := range testCases {
+		tc := testCase
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 			resp, err := client.Send(context.Background(), routes[0].Method, server.URL+routes[0].Path,
-				client.SetRequestOptionBody(tc.Data))
+				client.SetRequestOptionJSON(tc.Data))
 			require.Nil(t, err)
-			data := create{}
+			data := &create{}
 			response := gomHTTP.ServerResponse{
 				Data: gomHTTP.ServerResponseData{
-					Success: &data,
+					Success: data,
 				},
 			}
 			require.Equal(t, tc.StatusCode, resp.StatusCode)
 			err = client.ParseJSON(resp, &response)
 			require.Nil(t, err)
 			require.Equal(t, tc.ErrorCode, response.ErrorCode)
-			c, ok := tc.Data.(create)
-			require.True(t, ok)
 			if tc.ErrorCode == gomHTTP.ErrorCodeSuccess {
-				assertCreate(t, &c, &data)
+				c, ok := tc.Data.(*create)
+				require.True(t, ok)
+				assertCreate(t, c, data)
 			}
 		})
 	}
@@ -236,11 +243,12 @@ func TestCRUDGetHandler(t *testing.T) {
 	_, err = sampleDB.Exec(createTableSQL)
 	require.Nil(t, err)
 
-	crud, routes, err := Register(sampleDB, "test_crud_get_handler", &getCRUD{}, UseR())
+	crud, routes, err := Register(sampleDB, "test_crud_get_handler", &getCRUD{}, UseC(), UseR())
 	require.Nil(t, err)
-	require.Len(t, routes, 1)
+	require.Len(t, routes, 2)
 	require.NotNil(t, crud)
-	server := CreateSampleServer(routes...)
+	server, err := CreateSampleServer(routes...)
+	require.Nil(t, err)
 	require.NotNil(t, server)
 	testData := &get{
 		Name:        "test_name",
@@ -254,10 +262,10 @@ func TestCRUDGetHandler(t *testing.T) {
 	require.True(t, testData.ID > 0)
 
 	validData := map[string]interface{}{
-		crud.Config.pk: testData.ID,
+		crud.Config.pk.name: testData.ID,
 	}
 	inValidData := map[string]interface{}{
-		crud.Config.pk: "invalid",
+		crud.Config.pk.name: "invalid",
 	}
 
 	testCases := []struct {
@@ -267,7 +275,7 @@ func TestCRUDGetHandler(t *testing.T) {
 		ErrorCode  gomHTTP.ErrorCode
 	}{
 		{"invalid", inValidData, http.StatusBadRequest, gomHTTP.ErrorCodeBadRequest},
-		{"missing_param", map[string]interface{}{}, http.StatusBadRequest, gomHTTP.ErrorCodeValidationFailed},
+		{"missing_param", map[string]interface{}{}, http.StatusBadRequest, gomHTTP.ErrorCodeBadRequest},
 		{"success", validData, http.StatusOK, gomHTTP.ErrorCodeSuccess},
 	}
 	client, err := gomHTTP.CreateClient()
@@ -275,11 +283,11 @@ func TestCRUDGetHandler(t *testing.T) {
 	require.NotNil(t, client)
 	client.Connect()
 
-	for _, testcase := range testCases {
-		tc := testcase
+	for _, testCase := range testCases {
+		tc := testCase
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			resp, err := client.Send(context.Background(), routes[0].Method, server.URL+routes[0].Path,
+			resp, err := client.Send(context.Background(), routes[1].Method, server.URL+routes[1].Path,
 				client.SetRequestOptionQuery(tc.Data))
 			require.Nil(t, err)
 			data := &get{}
@@ -317,11 +325,15 @@ func TestCRUDUpdateHandler(t *testing.T) {
 	require.Nil(t, err)
 	_, err = sampleDB.Exec(createTableSQL)
 	require.Nil(t, err)
-	crud, routes, err := Register(sampleDB, "test_crud_update_handler", &updateCRUD{}, UseU())
+	crud, routes, err := Register(sampleDB, "test_crud_update_handler", &updateCRUD{}, UseC(), UseU(),
+		SetValidators(map[string]Validator{
+			"description": sampleValidator,
+		}))
 	require.Nil(t, err)
-	require.Len(t, routes, 1)
+	require.Len(t, routes, 2)
 	require.NotNil(t, crud)
-	server := CreateSampleServer(routes...)
+	server, err := CreateSampleServer(routes...)
+	require.Nil(t, err)
 	require.NotNil(t, server)
 	testData := &update{
 		Name:        "test_name",
@@ -334,7 +346,7 @@ func TestCRUDUpdateHandler(t *testing.T) {
 	require.Nil(t, err)
 	require.True(t, testData.ID > 0)
 
-	validData := update{
+	validData := &update{
 		ID:          testData.ID,
 		Age:         20,
 		Description: "test_updated_description",
@@ -342,13 +354,13 @@ func TestCRUDUpdateHandler(t *testing.T) {
 		List:        gomMySQL.StringSlice{"a1", "b1", "c1"},
 	}
 	inValidData := map[string]interface{}{
-		crud.Config.pk: "invalid",
-		"age":          "invalid",
-		"description":  "invalid \n description",
-		"info":         "invalid",
-		"list":         "invalid",
+		crud.Config.pk.name: "invalid",
+		"age":               "invalid",
+		"description":       "invalid \n description",
+		"info":              "invalid",
+		"list":              "invalid",
 	}
-	failedValidatorData := update{
+	failedValidatorData := &update{
 		ID:          testData.ID,
 		Age:         20,
 		Description: "test_failed_validator",
@@ -373,12 +385,12 @@ func TestCRUDUpdateHandler(t *testing.T) {
 	require.NotNil(t, client)
 	client.Connect()
 
-	for _, testcase := range testCases {
-		tc := testcase
+	for _, testCase := range testCases {
+		tc := testCase
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			resp, err := client.Send(context.Background(), routes[0].Method, server.URL+routes[0].Path,
-				client.SetRequestOptionBody(tc.Data))
+			resp, err := client.Send(context.Background(), routes[1].Method, server.URL+routes[1].Path,
+				client.SetRequestOptionJSON(tc.Data))
 			require.Nil(t, err)
 			data := &update{}
 			response := gomHTTP.ServerResponse{
@@ -390,9 +402,9 @@ func TestCRUDUpdateHandler(t *testing.T) {
 			err = client.ParseJSON(resp, &response)
 			require.Nil(t, err)
 			require.Equal(t, tc.ErrorCode, response.ErrorCode)
-			c, ok := tc.Data.(*update)
-			require.True(t, ok)
 			if tc.ErrorCode == gomHTTP.ErrorCodeSuccess {
+				c, ok := tc.Data.(*update)
+				require.True(t, ok)
 				assertUpdate(t, c, data)
 			}
 		})
@@ -418,11 +430,12 @@ func TestCRUDDeleteHandler(t *testing.T) {
 	_, err = sampleDB.Exec(createTableSQL)
 	require.Nil(t, err)
 
-	crud, routes, err := Register(sampleDB, "test_crud_delete_handler", &deleteCRUD{}, UseD())
+	crud, routes, err := Register(sampleDB, "test_crud_delete_handler", &deleteCRUD{}, UseC(), UseD(), UseR())
 	require.Nil(t, err)
-	require.Len(t, routes, 1)
+	require.Len(t, routes, 3)
 	require.NotNil(t, crud)
-	server := CreateSampleServer(routes...)
+	server, err := CreateSampleServer(routes...)
+	require.Nil(t, err)
 	require.NotNil(t, server)
 	testData := &delete{
 		Name:        "test_name",
@@ -435,16 +448,16 @@ func TestCRUDDeleteHandler(t *testing.T) {
 	require.Nil(t, err)
 	require.True(t, testData.ID > 0)
 
-	validData := map[string]interface{}{
-		crud.Config.pk: testData.ID,
+	validData := &delete{
+		ID: testData.ID,
 	}
 	inValidData := map[string]interface{}{
-		crud.Config.pk: "invalid",
+		crud.Config.pk.name: "invalid",
 	}
 
 	testCases := []struct {
 		Name       string
-		Data       map[string]interface{}
+		Data       interface{}
 		StatusCode int
 		ErrorCode  gomHTTP.ErrorCode
 	}{
@@ -458,17 +471,19 @@ func TestCRUDDeleteHandler(t *testing.T) {
 	require.NotNil(t, client)
 	client.Connect()
 
-	for _, testcase := range testCases {
-		tc := testcase
+	for _, testCase := range testCases {
+		tc := testCase
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			resp, err := client.Send(context.Background(), routes[0].Method, server.URL+routes[0].Path,
-				client.SetRequestOptionBody(tc.Data))
+			resp, err := client.Send(context.Background(), routes[1].Method, server.URL+routes[1].Path,
+				client.SetRequestOptionJSON(tc.Data))
 			require.Nil(t, err)
 			require.Equal(t, tc.StatusCode, resp.StatusCode)
-			obj, err := crud.Read(testData.ID)
-			require.Nil(t, err)
-			require.Nil(t, obj)
+			if tc.ErrorCode == gomHTTP.ErrorCodeSuccess {
+				obj, err := crud.Read(testData)
+				require.Nil(t, err)
+				require.Nil(t, obj)
+			}
 		})
 	}
 }
@@ -492,11 +507,12 @@ func TestCRUDListHandler(t *testing.T) {
 	_, err = sampleDB.Exec(createTableSQL)
 	require.Nil(t, err)
 
-	crud, routes, err := Register(sampleDB, "test_crud_list_handler", &listCRUD{}, UseL())
+	crud, routes, err := Register(sampleDB, "test_crud_list_handler", &listCRUD{}, UseC(), UseL())
 	require.Nil(t, err)
-	require.Len(t, routes, 1)
+	require.Len(t, routes, 2)
 	require.NotNil(t, crud)
-	server := CreateSampleServer(routes...)
+	server, err := CreateSampleServer(routes...)
+	require.Nil(t, err)
 	require.NotNil(t, server)
 	n := 10
 	testData := make([]*list, n)
@@ -529,7 +545,7 @@ func TestCRUDListHandler(t *testing.T) {
 		ErrorCode  gomHTTP.ErrorCode
 	}{
 		{"invalid", inValidData, http.StatusBadRequest, gomHTTP.ErrorCodeBadRequest},
-		{"missing_param", map[string]interface{}{}, http.StatusBadRequest, gomHTTP.ErrorCodeValidationFailed},
+		{"missing_param", map[string]interface{}{}, http.StatusBadRequest, gomHTTP.ErrorCodeBadRequest},
 		{"success", validData, http.StatusOK, gomHTTP.ErrorCodeSuccess},
 	}
 
@@ -538,17 +554,17 @@ func TestCRUDListHandler(t *testing.T) {
 	require.NotNil(t, client)
 	client.Connect()
 
-	for _, testcase := range testCases {
-		tc := testcase
+	for _, testCase := range testCases {
+		tc := testCase
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			resp, err := client.Send(context.Background(), routes[0].Method, server.URL+routes[0].Path,
+			resp, err := client.Send(context.Background(), routes[1].Method, server.URL+routes[1].Path,
 				client.SetRequestOptionQuery(tc.Data))
 			require.Nil(t, err)
 			data := []*list{}
 			response := gomHTTP.ServerResponse{
 				Data: gomHTTP.ServerResponseData{
-					Success: data,
+					Success: &data,
 				},
 			}
 			require.Equal(t, tc.StatusCode, resp.StatusCode)
@@ -558,7 +574,7 @@ func TestCRUDListHandler(t *testing.T) {
 			if tc.ErrorCode == gomHTTP.ErrorCodeSuccess {
 				require.Len(t, data, n)
 				for i, d := range data {
-					assertList(t, testData[i], d)
+					assertList(t, testData[n-i-1], d)
 				}
 			}
 		})
@@ -585,20 +601,18 @@ func assertGet(t *testing.T, expected *get, actual *get) {
 	require.Equal(t, expected.Description, actual.Description)
 	require.True(t, reflect.DeepEqual(expected.Info, actual.Info))
 	require.ElementsMatch(t, expected.List, actual.List)
-	require.WithinDuration(t, expected.CreatedAt, actual.CreatedAt, time.Second)
-	require.WithinDuration(t, expected.UpdatedAt, actual.UpdatedAt, time.Second)
+	require.False(t, actual.CreatedAt.IsZero())
+	require.False(t, actual.UpdatedAt.IsZero())
 }
 
 func assertUpdate(t *testing.T, expected *update, actual *update) {
 	require.NotNil(t, expected)
 	require.NotNil(t, actual)
-	require.Equal(t, expected.Name, actual.Name)
+	require.Equal(t, expected.ID, actual.ID)
 	require.Equal(t, expected.Age, actual.Age)
 	require.Equal(t, expected.Description, actual.Description)
 	require.True(t, reflect.DeepEqual(expected.Info, actual.Info))
 	require.ElementsMatch(t, expected.List, actual.List)
-	require.WithinDuration(t, expected.CreatedAt, actual.CreatedAt, time.Second)
-	require.WithinDuration(t, expected.UpdatedAt, actual.UpdatedAt, time.Second)
 }
 
 func assertList(t *testing.T, expected *list, actual *list) {
@@ -609,6 +623,6 @@ func assertList(t *testing.T, expected *list, actual *list) {
 	require.Equal(t, expected.Description, actual.Description)
 	require.True(t, reflect.DeepEqual(expected.Info, actual.Info))
 	require.ElementsMatch(t, expected.List, actual.List)
-	require.WithinDuration(t, expected.CreatedAt, actual.CreatedAt, time.Second)
-	require.WithinDuration(t, expected.UpdatedAt, actual.UpdatedAt, time.Second)
+	require.False(t, actual.CreatedAt.IsZero())
+	require.False(t, actual.UpdatedAt.IsZero())
 }

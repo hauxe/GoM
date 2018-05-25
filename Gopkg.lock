@@ -83,14 +83,14 @@
     "internal/singleflight",
     "internal/util"
   ]
-  revision = "877867d2845fbaf86798befe410b6ceb6f5c29a3"
-  version = "v6.10.2"
+  revision = "0f9028adf0837cf93c9705817493e5f6997cf026"
+  version = "v6.11.0"
 
 [[projects]]
   name = "github.com/go-sql-driver/mysql"
   packages = ["."]
   revision = "a0583e0143b1624142adab07e0e97fe106d99561"
-  version = "v1.3"
+  version = "v1.3.0"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -130,17 +130,19 @@
   revision = "8e809c8a86450a29b90dcc9efbf062d0fe6d9746"
 
 [[projects]]
-  branch = "server_client_impl"
+  branch = "add_crudl"
   name = "github.com/hauxe/gom"
   packages = [
     ".",
     "environment",
+    "http",
     "library",
     "log",
+    "mysql",
     "pool",
     "trace"
   ]
-  revision = "c40f481a9d995997798057137e312a8973595c31"
+  revision = "e920582b34e975de1ad5dd4573df401f3f384997"
 
 [[projects]]
   branch = "master"
@@ -265,7 +267,7 @@
     "trace",
     "websocket"
   ]
-  revision = "57065200b4b034a1c8ad54ff77069408c2218ae6"
+  revision = "dfa909b99c79129e1100513e5cd36307665e5723"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -292,7 +294,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "11a468237815f3a3ddf9f7c6e8b6b3b382a24d15"
+  revision = "694d95ba50e67b2e363f3483057db5d4910c18f9"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -330,6 +332,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a28b0cde980b5e0139da59a0ce2b8958b4acbcad91d69e45efcb210cac9198ce"
+  inputs-digest = "24393864a96d39230eed46adbad5f317b40976cd8d6900276fc16e1750e7850f"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -5,9 +5,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/hauxe/gom/environment"
@@ -45,6 +47,7 @@ type RequestOption struct {
 	Body      io.Reader
 	Timeout   time.Duration
 	Transport *http.Transport
+	headerMux sync.Mutex
 }
 
 // Client defines GRPC client properties
@@ -172,13 +175,21 @@ func (c *Client) Send(ctx context.Context, method string, url string,
 	return res, err
 }
 
-// SetRequestOptionBody set request body
-func (c *Client) SetRequestOptionBody(body interface{}) SendClientOptions {
+// SetRequestOptionJSON set request json
+func (c *Client) SetRequestOptionJSON(body interface{}) SendClientOptions {
 	return func(ro *RequestOption) error {
+		// set header json
+		err := c.SetRequestOptionHeader(map[string]interface{}{
+			HeaderContentType: ContentTypeJSON,
+		})(ro)
+		if err != nil {
+			return errors.Wrap(err, lib.StringTags("set request option",
+				"set json header"))
+		}
 		data, err := json.Marshal(body)
 		if err != nil {
 			return errors.Wrap(err, lib.StringTags("set request option",
-				"error marshaling body: %v", body))
+				fmt.Sprintf("error marshaling body: %v", body)))
 		}
 		ro.Body = bytes.NewReader(data)
 		return nil
@@ -194,9 +205,16 @@ func (c *Client) SetRequestOptionQuery(query map[string]interface{}) SendClientO
 }
 
 // SetRequestOptionHeader set request header
-func (c *Client) SetRequestOptionHeader(header map[string]interface{}) SendClientOptions {
+func (c *Client) SetRequestOptionHeader(headers map[string]interface{}) SendClientOptions {
 	return func(ro *RequestOption) error {
-		ro.Header = header
+		ro.headerMux.Lock()
+		defer ro.headerMux.Unlock()
+		if ro.Header == nil {
+			ro.Header = make(map[string]interface{}, len(headers))
+		}
+		for key, header := range headers {
+			ro.Header[key] = header
+		}
 		return nil
 	}
 }

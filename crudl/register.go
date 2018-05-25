@@ -6,7 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	gomHTTP "github.com/hauxe/GoM/http"
+	gomHTTP "github.com/hauxe/gom/http"
+	sdklog "github.com/hauxe/gom/log"
 
 	"github.com/pkg/errors"
 
@@ -37,6 +38,11 @@ func Register(db *sqlx.DB, table string, object Object, options ...Option) (crud
 			Object:    object,
 		},
 	}
+	crud.Logger, err = sdklog.NewFactory()
+
+	if err != nil {
+		return nil, nil, err
+	}
 	// set up options
 	for _, op := range options {
 		if err := op(crud.Config); err != nil {
@@ -49,7 +55,7 @@ func Register(db *sqlx.DB, table string, object Object, options ...Option) (crud
 	if len(crud.Config.fields) == 0 {
 		return nil, nil, errors.Errorf("table %s doesnt specify any working field", crud.Config.TableName)
 	}
-	if crud.Config.pk == "" {
+	if crud.Config.pk == nil {
 		return nil, nil, errors.Errorf("table %s doesnt specify the primary key", crud.Config.TableName)
 	}
 	if crud.Config.C {
@@ -69,7 +75,7 @@ func Register(db *sqlx.DB, table string, object Object, options ...Option) (crud
 	}
 	if crud.Config.L {
 		// create "list" route handler
-		routes = append(routes, crud.registerD())
+		routes = append(routes, crud.registerL())
 	}
 	return
 }
@@ -117,18 +123,30 @@ func UseL() Option {
 // SetValidators set validators
 func SetValidators(validators map[string]Validator) Option {
 	return func(config *Config) error {
-		config.Validators = validators
+		config.validatorMux.Lock()
+		defer config.validatorMux.Unlock()
+		if config.Validators == nil {
+			config.Validators = make(map[string]Validator, len(validators))
+		}
+		for key, validator := range validators {
+			config.Validators[key] = validator
+		}
 		return nil
 	}
 }
 
 func (crud *CRUD) registerC() gomHTTP.ServerRoute {
 	// build create sql
-	fieldNames := crud.Config.createFields
-	if len(fieldNames) == 0 {
+	fields := crud.Config.createFields
+	if len(fields) == 0 {
 		// allow create all fields
-		fieldNames = crud.Config.fields
+		fields = crud.Config.fields
 	}
+	fieldNames := make([]string, len(fields))
+	for i, field := range fields {
+		fieldNames[i] = field.name
+	}
+	crud.Config.createdFields = fields
 	crud.Config.sqlCRUDCreate = fmt.Sprintf(sqlCRUDCreate, crud.Config.TableName,
 		strings.Join(fieldNames, ","), ":"+strings.Join(fieldNames, ",:"))
 	// build validator
@@ -150,38 +168,48 @@ func (crud *CRUD) registerC() gomHTTP.ServerRoute {
 }
 
 func (crud *CRUD) registerR() gomHTTP.ServerRoute {
-	// build create sql
-	fieldNames := crud.Config.selectFields
-	if len(fieldNames) == 0 {
-		// allow create all fields
-		fieldNames = crud.Config.fields
+	// build select sql
+	fields := crud.Config.selectFields
+	if len(fields) == 0 {
+		// allow select all fields
+		fields = crud.Config.fields
 	}
+	fieldNames := make([]string, len(fields))
+	for i, field := range fields {
+		fieldNames[i] = field.name
+	}
+	crud.Config.selectedFields = fields
 	crud.Config.sqlCRUDRead = fmt.Sprintf(sqlCRUDRead, strings.Join(fieldNames, ","),
-		crud.Config.TableName, crud.Config.pk)
+		crud.Config.TableName, crud.Config.pk.name)
 	return gomHTTP.ServerRoute{
 		Name:       "crud_read_" + crud.Config.TableName,
 		Method:     http.MethodGet,
 		Path:       fmt.Sprintf("/%s", crud.Config.TableName),
-		Validators: []gomHTTP.ParamValidator{validatePrimaryKey(crud.Config.pk)},
+		Validators: []gomHTTP.ParamValidator{validatePrimaryKey(crud.Config.pk.index)},
 		Handler:    crud.handleRead,
 	}
 }
 
 func (crud *CRUD) registerU() gomHTTP.ServerRoute {
-	// build create sql
-	fieldNames := crud.Config.updateFields
-	if len(fieldNames) == 0 {
-		// allow create all fields
-		fieldNames = crud.Config.fields
+	// build update sql
+	fields := crud.Config.updateFields
+	if len(fields) == 0 {
+		// allow update all fields
+		fields = crud.Config.fields
 	}
+	fieldNames := make([]string, len(fields))
+	for i, field := range fields {
+		fieldNames[i] = field.name
+	}
+	crud.Config.updatedFields = fields
 	names := make([]string, len(fieldNames))
 	for i, field := range fieldNames {
 		names[i] = fmt.Sprintf("`%s` = :%s", field, field)
 	}
 	crud.Config.sqlCRUDUpdate = fmt.Sprintf(sqlCRUDUpdate, crud.Config.TableName,
-		strings.Join(names, ","), crud.Config.pk, crud.Config.pk)
+		strings.Join(names, ","), crud.Config.pk.name, crud.Config.pk.name)
 	// build validator
-	validators := []gomHTTP.ParamValidator{validatePrimaryKey(crud.Config.pk)}
+	validators := []gomHTTP.ParamValidator{validatePrimaryKey(crud.Config.pk.index)}
 	for _, field := range fieldNames {
 		if validatorName, ok := crud.Config.fieldValidators[field]; ok {
 			if validator, ok := crud.Config.Validators[validatorName]; ok {
@@ -201,25 +229,31 @@ func (crud *CRUD) registerU() gomHTTP.ServerRoute {
 func (crud *CRUD) registerD() gomHTTP.ServerRoute {
 	// build create sql
 	crud.Config.sqlCRUDDelete = fmt.Sprintf(sqlCRUDDelete, crud.Config.TableName,
-		crud.Config.pk)
+		crud.Config.pk.name)
 	return gomHTTP.ServerRoute{
 		Name:       "crud_delete_" + crud.Config.TableName,
 		Method:     http.MethodDelete,
 		Path:       fmt.Sprintf("/%s", crud.Config.TableName),
-		Validators: []gomHTTP.ParamValidator{validatePrimaryKey(crud.Config.pk)},
+		Validators: []gomHTTP.ParamValidator{validatePrimaryKey(crud.Config.pk.index)},
 		Handler:    crud.handleDelete,
 	}
 }
 
 func (crud *CRUD) registerL() gomHTTP.ServerRoute {
-	// build create sql
-	fieldNames := crud.Config.listFields
-	if len(fieldNames) == 0 {
-		// allow create all fields
-		fieldNames = crud.Config.fields
+	// build list sql
+	fields := crud.Config.listFields
+	if len(fields) == 0 {
+		// allow update all fields
+		fields = crud.Config.fields
 	}
-	crud.Config.sqlCRUDList = fmt.Sprintf(sqlCRUDList, strings.Join(fieldNames, ","),
-		crud.Config.TableName, crud.Config.pk)
+	fieldNames := make([]string, len(fields))
+	for i, field := range fields {
+		fieldNames[i] = field.name
+	}
+	crud.Config.listedFields = fields
+	crud.Config.sqlCRUDList = fmt.Sprintf(sqlCRUDList, "`"+strings.Join(fieldNames, "`,`")+"`",
+		crud.Config.TableName, crud.Config.pk.name)
+	fmt.Println(crud.Config.sqlCRUDList)
 	return gomHTTP.ServerRoute{
 		Name:    "crud_list_" + crud.Config.TableName,
 		Method:  http.MethodGet,

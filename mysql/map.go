@@ -11,7 +11,7 @@ type StringMap map[string]string
 
 // Scan sqlx JSON scan method
 func (m *StringMap) Scan(val interface{}) error {
-	m = &StringMap{}
+	*m = StringMap{}
 	switch v := val.(type) {
 	case []byte:
 		return json.Unmarshal(v, &m)
