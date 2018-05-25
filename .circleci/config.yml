@@ -27,6 +27,9 @@ jobs:
 
       # specify any bash command here prefixed with `run: `
       - run:
+          name: get mysql client
+          command: sudo apt install -y mysql-client
+      - run:
           name: create mysql default database
           command: mysql  -h 127.0.0.1 -u root -e "CREATE SCHEMA IF NOT EXISTS default_db DEFAULT CHARACTER SET utf8;"
       - run:
