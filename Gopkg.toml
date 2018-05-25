@@ -50,7 +50,7 @@
   name = "github.com/grpc-ecosystem/grpc-opentracing"
 
 [[constraint]]
-  branch = "add_crudl"
+  branch = "master"
   name = "github.com/hauxe/gom"
 
 [[constraint]]

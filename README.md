@@ -24,7 +24,7 @@ go get -u github.com/hauxe/gom
 ### Todos
 
 - Write MORE Tests
-- Add CRUDL handlers
+- Add File IO
 
 ### License
 
