@@ -52,7 +52,7 @@ type ServerResponseData struct {
 
 // ServerResponse defines generic server response value
 type ServerResponse struct {
-	ErrorCode    errorCode          `json:"error_code"`
+	ErrorCode    ErrorCode          `json:"error_code"`
 	ErrorMessage string             `json:"error_message"`
 	Data         ServerResponseData `json:"data"`
 	Time         *lib.TimeRFC3339   `json:"time"`
@@ -61,16 +61,15 @@ type ServerResponse struct {
 // ParseParameters parses parameters from request body or query
 func ParseParameters(r *http.Request, dst interface{}) error {
 	var err error
+	defer r.Body.Close()
 	switch r.Header.Get(HeaderContentType) {
 	case ContentTypeForm:
-		defer r.Body.Close()
 		err = r.ParseForm()
 		if err != nil {
-			return err
+			return BadRequestError{err}
 		}
 		err = decoder.Decode(dst, r.Form)
 	case ContentTypeJSON:
-		defer r.Body.Close()
 		decoder := json.NewDecoder(r.Body)
 		// numbers are represented as string instead of float64
 		decoder.UseNumber()
@@ -80,7 +79,7 @@ func ParseParameters(r *http.Request, dst interface{}) error {
 		err = decoder.Decode(dst, r.URL.Query())
 	}
 	if err != nil {
-		return err
+		return BadRequestError{err}
 	}
 	// validate parameters
 	ctx := r.Context()
@@ -91,7 +90,7 @@ func ParseParameters(r *http.Request, dst interface{}) error {
 	if validators, ok := val.([]ParamValidator); ok {
 		for _, validator := range validators {
 			if err = validator(ctx, dst); err != nil {
-				return err
+				return ValidationError{err}
 			}
 		}
 	}
@@ -99,10 +98,10 @@ func ParseParameters(r *http.Request, dst interface{}) error {
 }
 
 // SendResponse encodes data as JSON object and returns it to client
-func SendResponse(w http.ResponseWriter, statusCode int, code errorCode,
+func SendResponse(w http.ResponseWriter, statusCode int, code ErrorCode,
 	message string, data map[string]interface{}) error {
 	w.Header().Set(HeaderContentType, ContentTypeJSON)
-	w.WriteHeader(statusCode)
+	w.WriteHeader(int(statusCode))
 	ti := lib.TimeRFC3339(time.Now())
 	respData := ServerResponseData{}
 	for k, v := range data {
@@ -130,26 +129,26 @@ func SendResponse(w http.ResponseWriter, statusCode int, code errorCode,
 	return err
 }
 
+// SendError send internal server error
+func SendError(w http.ResponseWriter, err error) error {
+	var status int
+	var errorCode ErrorCode
+	switch err.(type) {
+	case BadRequestError:
+		status = http.StatusBadRequest
+		errorCode = ErrorCodeBadRequest
+	case ValidationError:
+		status = http.StatusBadRequest
+		errorCode = ErrorCodeValidationFailed
+	default:
+		status = http.StatusInternalServerError
+		errorCode = ErrorCodeInternalError
+	}
+	return SendResponse(w, status, errorCode, err.Error(), nil)
+}
+
 func buildRouteHandler(method string, validators []ParamValidator, handle http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// set response headers
-		w.Header().Set(HeaderAllowOrigin, allowOrigins)
-		w.Header().Set(HeaderAllowCredentials, allowCredentials)
-		w.Header().Set(HeaderExposeHeaders, exposeHeaders)
-
-		// preflight request
-		if r.Method == http.MethodOptions {
-			w.Header().Set(HeaderAllowHeaders, allowHeaders)
-			w.Header().Set(HeaderAllowMethods, allowMethods)
-			SendResponse(w, http.StatusOK, ErrorCodeSuccess, "ok", nil)
-			return
-		}
-
-		if r.Method != method {
-			SendResponse(w, http.StatusMethodNotAllowed, ErrorCodeMalformedMethod,
-				"method is not correct for the requested route", nil)
-			return
-		}
 		ctx := r.Context()
 		// inject validator to request context
 		if len(validators) > 0 {

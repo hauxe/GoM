@@ -28,7 +28,7 @@ type responseData struct {
 }
 
 type response struct {
-	ErrorCode    errorCode        `json:"error_code"`
+	ErrorCode    ErrorCode        `json:"error_code"`
 	ErrorMessage string           `json:"error_message"`
 	Data         responseData     `json:"data"`
 	Time         *lib.TimeRFC3339 `json:"time"`
@@ -437,41 +437,6 @@ func TestBuildRouteHandler(t *testing.T) {
 		}),
 	}
 	server := CreateSampleServer(routeNoValidator, routeErrorValidator, routeSuccessValidator)
-	t.Run("success options method", func(t *testing.T) {
-		t.Parallel()
-		hc := http.Client{}
-		req, err := http.NewRequest(http.MethodOptions, server.URL+routeNoValidator.Path, nil)
-		require.Nil(t, err)
-		resp, err := hc.Do(req)
-		require.Nil(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		dest := response{}
-		decoder := json.NewDecoder(resp.Body)
-		// numbers are represented as string instead of float64
-		decoder.UseNumber()
-		err = decoder.Decode(&dest)
-		require.Nil(t, err)
-		require.Equal(t, ErrorCodeSuccess, dest.ErrorCode)
-		require.Equal(t, "ok", dest.ErrorMessage)
-	})
-	t.Run("error mismatch method", func(t *testing.T) {
-		t.Parallel()
-		hc := http.Client{}
-		req, err := http.NewRequest(http.MethodPost, server.URL+routeNoValidator.Path, nil)
-		require.Nil(t, err)
-		resp, err := hc.Do(req)
-		require.Nil(t, err)
-		require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
-		dest := response{}
-		decoder := json.NewDecoder(resp.Body)
-		// numbers are represented as string instead of float64
-		decoder.UseNumber()
-		err = decoder.Decode(&dest)
-		require.Nil(t, err)
-		require.Equal(t, ErrorCodeMalformedMethod, dest.ErrorCode)
-		require.Equal(t, "method is not correct for the requested route", dest.ErrorMessage)
-	})
-
 	t.Run("success no validator", func(t *testing.T) {
 		t.Parallel()
 		// send request
