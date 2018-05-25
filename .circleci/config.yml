@@ -16,6 +16,8 @@ jobs:
         environment:
           MYSQL_USER: root
           MYSQL_ALLOW_EMPTY_PASSWORD: true
+        ports:
+          - 3306:3306
 
     #### TEMPLATE_NOTE: go expects specific checkout path representing url
     #### expecting it in the form of
