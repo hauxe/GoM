@@ -142,7 +142,7 @@
     "pool",
     "trace"
   ]
-  revision = "e920582b34e975de1ad5dd4573df401f3f384997"
+  revision = "d49b01bda0ee6c818446cb7ac5379fede1e4782b"
 
 [[projects]]
   branch = "master"
@@ -186,7 +186,6 @@
     "wire"
   ]
   revision = "4c9fbcbd6d73a644fd17214fe475296780c68fb5"
-  version = "v0.3.3"
 
 [[projects]]
   name = "github.com/pierrec/lz4"

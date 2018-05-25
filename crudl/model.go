@@ -267,7 +267,11 @@ func buildListOfFields(obj interface{}, fields []*field) (map[string]interface{}
 		if !f.CanInterface() {
 			return nil, errors.Errorf("field %s can not interface", field.name)
 		}
-		result[field.name] = f.Interface()
+		name := field.jsonName
+		if name == "" {
+			name = field.name
+		}
+		result[name] = f.Interface()
 	}
 	return result, nil
 }

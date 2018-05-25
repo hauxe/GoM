@@ -26,34 +26,36 @@ func TestScanStructMySQL(t *testing.T) {
 	}
 	err := crud.scanStructMySQL(rv)
 	require.Nil(t, err)
-	require.Equal(t, "id_db", crud.Config.pk)
+	require.Equal(t, 0, crud.Config.pk.index)
+	require.Equal(t, "id_db", crud.Config.pk.name)
+	require.Equal(t, "id", crud.Config.pk.jsonName)
 
 	createFields := crud.Config.createFields
 	require.Len(t, createFields, 4)
-	require.Equal(t, "name_db", createFields[0])
-	require.Equal(t, "description_db", createFields[1])
-	require.Equal(t, "missing_json_db", createFields[2])
-	require.Equal(t, "only_create_db", createFields[3])
+	require.Equal(t, "name_db", createFields[0].name)
+	require.Equal(t, "description_db", createFields[1].name)
+	require.Equal(t, "missing_json_db", createFields[2].name)
+	require.Equal(t, "only_create_db", createFields[3].name)
 
 	updateFields := crud.Config.updateFields
 	require.Len(t, updateFields, 3)
-	require.Equal(t, "name_db", updateFields[0])
-	require.Equal(t, "description_db", updateFields[1])
-	require.Equal(t, "only_update_db", updateFields[2])
+	require.Equal(t, "name_db", updateFields[0].name)
+	require.Equal(t, "description_db", updateFields[1].name)
+	require.Equal(t, "only_update_db", updateFields[2].name)
 
 	selectFields := crud.Config.selectFields
 	require.Len(t, selectFields, 4)
-	require.Equal(t, "id_db", selectFields[0])
-	require.Equal(t, "name_db", selectFields[1])
-	require.Equal(t, "missing_json_db", selectFields[2])
-	require.Equal(t, "only_select_db", selectFields[3])
+	require.Equal(t, "id_db", selectFields[0].name)
+	require.Equal(t, "name_db", selectFields[1].name)
+	require.Equal(t, "missing_json_db", selectFields[2].name)
+	require.Equal(t, "only_select_db", selectFields[3].name)
 
 	listFields := crud.Config.listFields
 	require.Len(t, listFields, 5)
-	require.Equal(t, "id_db", listFields[0])
-	require.Equal(t, "name_db", listFields[1])
-	require.Equal(t, "description_db", listFields[2])
-	require.Equal(t, "missing_json_db", listFields[3])
-	require.Equal(t, "only_list_db", listFields[4])
+	require.Equal(t, "id_db", listFields[0].name)
+	require.Equal(t, "name_db", listFields[1].name)
+	require.Equal(t, "description_db", listFields[2].name)
+	require.Equal(t, "missing_json_db", listFields[3].name)
+	require.Equal(t, "only_list_db", listFields[4].name)
 
 }
