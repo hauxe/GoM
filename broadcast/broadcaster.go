@@ -27,6 +27,9 @@ type Receiver struct {
 	shutdown chan struct{}
 }
 
+// BroadcasterClosed broadcaster closed
+type BroadcasterClosed error
+
 // NewBroadcaster create a new broadcaster object.
 func NewBroadcaster() *Broadcaster {
 	listenc := make(chan (chan (chan broadcast)))
@@ -92,15 +95,22 @@ func (b *Broadcaster) Write(v interface{}) error {
 
 // Read read a value that has been broadcast,
 // waiting until one is available if necessary.
-func (r *Receiver) Read() (interface{}, error) {
+func (r *Receiver) Read(handlers ...func(interface{}) (interface{}, error)) (interface{}, error) {
 	select {
 	case b := <-r.c:
 		v := b.v
+		for _, handler := range handlers {
+			val, err := handler(v)
+			if err != nil {
+				return nil, err
+			}
+			b.v = val
+		}
 		r.c <- b
 		r.c = b.c
 		return v, nil
 	case <-r.shutdown:
 		r.c = nil
-		return nil, errors.New("broadcaster is closed")
+		return nil, BroadcasterClosed(errors.New("broadcaster is closed"))
 	}
 }

@@ -130,7 +130,7 @@
   revision = "8e809c8a86450a29b90dcc9efbf062d0fe6d9746"
 
 [[projects]]
-  branch = "add_crudl"
+  branch = "master"
   name = "github.com/hauxe/gom"
   packages = [
     ".",
@@ -142,7 +142,7 @@
     "pool",
     "trace"
   ]
-  revision = "d49b01bda0ee6c818446cb7ac5379fede1e4782b"
+  revision = "99fb92b01c16a06e694a8259ee849dd37bd5b713"
 
 [[projects]]
   branch = "master"
@@ -252,6 +252,12 @@
   version = "v1.8.0"
 
 [[projects]]
+  name = "gocv.io/x/gocv"
+  packages = ["."]
+  revision = "e15f50944641934b422fa4f907028058690bba00"
+  version = "0.12.0"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = [
@@ -331,6 +337,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "24393864a96d39230eed46adbad5f317b40976cd8d6900276fc16e1750e7850f"
+  inputs-digest = "7bfdd251de5f5accfc942935284df141047ac86a222bff2e9d680b7ef006d7ec"
   solver-name = "gps-cdcl"
   solver-version = 1
