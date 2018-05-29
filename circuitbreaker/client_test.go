@@ -62,8 +62,8 @@ func TestExecute(t *testing.T) {
 				return nil
 			})
 		require.NotNil(t, err)
-		// sleep 100 microsecond and then do success request to open circuit again
-		time.Sleep(sleepWindow + time.Microsecond*100)
+		// sleep 1 sec and then do success request to open circuit again
+		time.Sleep(sleepWindow + time.Second)
 		for i := int64(0); i < requireSuccess+1; i++ {
 			err = client.Execute(context.Background(), t.Name(),
 				func(_ context.Context) error {
@@ -102,7 +102,7 @@ func TestExecute(t *testing.T) {
 				wg.Done()
 				err = client.Execute(context.Background(), t.Name(),
 					func(_ context.Context) error {
-						time.Sleep(2 * time.Second)
+						time.Sleep(3 * time.Second)
 						return nil
 					}, func(_ context.Context, _ error) error {
 						t.Error("can not reach fallback here")
