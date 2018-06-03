@@ -4,8 +4,8 @@
 [[projects]]
   name = "github.com/Shopify/sarama"
   packages = ["."]
-  revision = "f7be6aa2bc7b2e38edf816b08b582782194a1c02"
-  version = "v1.16.0"
+  revision = "35324cf48e33d8260e1c7c18854465a904ade249"
+  version = "v1.17.0"
 
 [[projects]]
   name = "github.com/apache/thrift"
@@ -142,7 +142,7 @@
     "pool",
     "trace"
   ]
-  revision = "99fb92b01c16a06e694a8259ee849dd37bd5b713"
+  revision = "b44c81f7d46b463380cda41ebe347e21223aa872"
 
 [[projects]]
   branch = "master"
@@ -252,12 +252,6 @@
   version = "v1.8.0"
 
 [[projects]]
-  name = "gocv.io/x/gocv"
-  packages = ["."]
-  revision = "e15f50944641934b422fa4f907028058690bba00"
-  version = "0.12.0"
-
-[[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = [
@@ -272,7 +266,7 @@
     "trace",
     "websocket"
   ]
-  revision = "dfa909b99c79129e1100513e5cd36307665e5723"
+  revision = "1e491301e022f8f977054da4c2d852decd59571f"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -299,7 +293,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "694d95ba50e67b2e363f3483057db5d4910c18f9"
+  revision = "81158efcc9f219c511e4d3c0d61a0e6e49c01a24"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -337,6 +331,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7bfdd251de5f5accfc942935284df141047ac86a222bff2e9d680b7ef006d7ec"
+  inputs-digest = "b0d767f2dc9171c2b4bb55d741a6f625c353f2abe11a341c62e884bb2dd4380f"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -9,8 +9,6 @@ import (
 	"github.com/hauxe/gom/environment"
 
 	"github.com/gorilla/schema"
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
@@ -55,7 +53,6 @@ type Server struct {
 	S           *http.Server
 	Handler     http.Handler
 	Mux         *http.ServeMux
-	TraceClient *trace.Client
 	Logger      sdklog.Factory
 	WorkerPools []*pool.Worker
 	URL         string
@@ -201,14 +198,6 @@ func (s *Server) SetTLSOption(serveTLS bool, certFile, keyFile string) StartServ
 	}
 }
 
-// SetTracerOption set tracer
-func (s *Server) SetTracerOption(tracer *trace.Client) StartServerOptions {
-	return func() (err error) {
-		s.TraceClient = tracer
-		return nil
-	}
-}
-
 // SetHandlerOption set http server route handler
 func (s *Server) SetHandlerOption(routes ...ServerRoute) StartServerOptions {
 	return func() (err error) {
@@ -263,37 +252,16 @@ func (s *Server) BuildHandler(route *ServerRoute) (handler http.HandlerFunc) {
 }
 
 // SetMiddlewareTracerOption set http server middleware type tracer
-func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
+func (s *Server) SetMiddlewareTracerOption(tracer *trace.Client) StartServerOptions {
 	return func() (err error) {
-		if s.TraceClient == nil {
+		if tracer == nil {
 			return errors.New("option SetTracerOption must be set first")
 		}
-		handler := s.Handler
-		s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Try to join to a trace propagated in request.
-			wireContext, err := s.TraceClient.Tracer.Extract(
-				opentracing.TextMap,
-				opentracing.HTTPHeadersCarrier(r.Header),
-			)
-			if err != nil &&
-				err != opentracing.ErrSpanContextNotFound &&
-				err != opentracing.ErrUnsupportedFormat {
-				s.Logger.For(r.Context()).Fatal("error encountered while trying to extract span",
-					zap.Error(err))
-			}
-			if wireContext != nil {
-				// create span
-				span := s.TraceClient.Tracer.StartSpan("middleware tracer", ext.RPCServerOption(wireContext))
-
-				// store span in context
-				ctx := opentracing.ContextWithSpan(r.Context(), span)
-
-				// update request context to include our new span
-				r = r.WithContext(ctx)
-				span.Finish()
-			}
-			handler.ServeHTTP(w, r)
-		})
+		s.Handler = &TracerMiddleWare{
+			Handler: s.Handler,
+			Client:  tracer,
+			Logger:  s.Logger,
+		}
 		return nil
 	}
 }
@@ -301,7 +269,6 @@ func (s *Server) SetMiddlewareTracerOption() StartServerOptions {
 // SetMiddlewareWorkerPoolOption set http server uses worker pool
 func (s *Server) SetMiddlewareWorkerPoolOption(maxWorkers int) StartServerOptions {
 	return func() (err error) {
-		handler := s.Handler
 		workerPool, err := pool.CreateWorker()
 		if err != nil {
 			return err
@@ -310,18 +277,13 @@ func (s *Server) SetMiddlewareWorkerPoolOption(maxWorkers int) StartServerOption
 		if err != nil {
 			return err
 		}
+
 		s.WorkerPools = append(s.WorkerPools, workerPool)
-		s.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			job := JobHandler{
-				name:    "handle http request",
-				r:       r,
-				w:       w,
-				handler: handler.ServeHTTP,
-				c:       make(chan struct{}, 1),
-			}
-			workerPool.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Second)
-			<-job.c
-		})
+		s.Handler = &WorkerPoolMiddleware{
+			Handler: s.Handler,
+			Pool:    workerPool,
+			Timeout: time.Duration(s.Config.ReadTimeout) * time.Second,
+		}
 		return nil
 	}
 }
@@ -341,9 +303,17 @@ func (s *Server) SetupWorkerPoolHandler(maxWorkers int, handler http.HandlerFunc
 		job := JobHandler{
 			name:    "handle http request async",
 			r:       r,
-			w:       w,
 			handler: handler,
 		}
-		workerPool.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Second)
+		err := workerPool.QueueJob(&job, time.Duration(s.Config.ReadTimeout)*time.Second)
+		if err != nil {
+			err = SendError(w, err)
+			if err != nil {
+				s.Logger.For(r.Context()).Error("queue job error", zap.Error(err))
+			}
+			return
+		}
+		SendResponse(w, http.StatusOK, ErrorCodeSuccess, "successfully queued job", nil)
+		return
 	}, nil
 }
