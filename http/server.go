@@ -163,9 +163,6 @@ func (s *Server) Stop() error {
 //InitHandler initializes route handler
 func (s *Server) InitHandler() error {
 	s.Mux = http.NewServeMux()
-	s.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		SendResponse(w, http.StatusOK, ErrorCodeSuccess, "reached default handler", nil)
-	})
 	s.Handler = http.HandlerFunc(s.Mux.ServeHTTP)
 	return nil
 }
