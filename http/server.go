@@ -200,7 +200,7 @@ func (s *Server) SetHandlerOption(routes ...ServerRoute) StartServerOptions {
 	return func() (err error) {
 		s.Logger.Bg().Info("setting up handler")
 		for _, route := range routes {
-			handler := s.BuildHandler(&route)
+			handler := s.BuildHandler(route)
 			if handler != nil {
 				s.Mux.HandleFunc(route.Path, handler)
 			}
@@ -212,7 +212,7 @@ func (s *Server) SetHandlerOption(routes ...ServerRoute) StartServerOptions {
 }
 
 // BuildHandler build http handler
-func (s *Server) BuildHandler(route *ServerRoute) (handler http.HandlerFunc) {
+func (s *Server) BuildHandler(route ServerRoute) (handler http.HandlerFunc) {
 	s.routesMux.Lock()
 	defer s.routesMux.Unlock()
 	if s.Routes == nil {
