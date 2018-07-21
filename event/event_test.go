@@ -3,6 +3,7 @@ package event
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -42,14 +43,17 @@ func TestEvent(t *testing.T) {
 		handler: client,
 		wg:      new(sync.WaitGroup),
 	}
+	mux := new(sync.Mutex)
 	called := false
 	e.wg.Add(1)
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	client.On(e, func(evt Event) {
-		wg.Done()
+		defer wg.Done()
 		_, ok := evt.(*event)
 		require.True(t, ok)
+		mux.Lock()
+		defer mux.Unlock()
 		called = true
 	})
 	e.wg.Wait()
@@ -57,11 +61,14 @@ func TestEvent(t *testing.T) {
 	e.wg.Add(1)
 	server.Emit(e)
 	e.wg.Wait()
+	mux.Lock()
 	require.False(t, called)
+	mux.Unlock()
+	time.Sleep(time.Second)
 	e.wg.Add(2)
 	server.Emit(e)
-	wg.Wait()
 	e.wg.Wait()
+	wg.Wait()
 	require.True(t, called)
 	require.Equal(t, limit, e.counter)
 }
