@@ -21,7 +21,7 @@ func TestExecute(t *testing.T) {
 		errorThreshold := int64(50)
 		rollingDuration := 5 * time.Second
 		rollingBuckets := 5
-		sleepWindow := 100 * time.Microsecond
+		sleepWindow := 100 * time.Millisecond
 		halfOpenAttempts := int64(10)
 		requireSuccess := int64(2)
 		require.Nil(t, client.Start(t.Name(),
